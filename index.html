@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PnL Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+    :root {
+        --font-sans: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        --font-mono: 'Roboto Mono', ui-monospace, monospace;
+
+        --radius-s: 8px;
+        --radius-m: 14px;
+        --radius-l: 20px;
+
+        --elev-1: 0 1px 3px rgba(0,0,0,.10), 0 1px 2px rgba(0,0,0,.06);
+        --elev-2: 0 4px 10px rgba(0,0,0,.10), 0 2px 4px rgba(0,0,0,.06);
+        --elev-3: 0 10px 24px rgba(0,0,0,.14), 0 4px 8px rgba(0,0,0,.08);
+
+        /* pastel accent set — shared across themes */
+        --pastel-lav: #C9B6F5;
+        --pastel-mint: #A8E6C1;
+        --pastel-sky: #A9DDF3;
+        --pastel-peach: #FFCBA4;
+        --pastel-pink: #FFB8D9;
+        --pastel-lemon: #FFE79A;
+    }
+
+    /* ── Light theme (default) ── */
+    body[data-theme="light"] {
+        --bg: #F6F5FB;
+        --surface: #FFFFFF;
+        --surface-alt: #F0EEFA;
+        --ink: #211F2E;
+        --muted: #6E6A80;
+        --border: #E3E0F0;
+        --drawer-bg: #FFFFFF;
+        --drawer-ink: #211F2E;
+        --drawer-muted: #8A85A0;
+        --drawer-active-bg: #EDE7FC;
+        --topbar-bg: #FFFFFF;
+        --accent: #8B6FE0;
+        --accent-ink: #211F2E;
+        --pos: #1E9E5A;
+        --pos-bg: #DCF6E7;
+        --neg: #E0475A;
+        --neg-bg: #FDE1E4;
+    }
+
+    /* ── Dark theme ── */
+    body[data-theme="dark"] {
+        --bg: #17151F;
+        --surface: #221F2E;
+        --surface-alt: #2A2739;
+        --ink: #F1EFFA;
+        --muted: #A79FC2;
+        --border: #35314A;
+        --drawer-bg: #1C1A26;
+        --drawer-ink: #F1EFFA;
+        --drawer-muted: #918AAD;
+        --drawer-active-bg: #322B4D;
+        --topbar-bg: #1C1A26;
+        --accent: #C9B6F5;
+        --accent-ink: #17151F;
+        --pos: #7FE0A8;
+        --pos-bg: #1E3A2B;
+        --neg: #FF9AA8;
+        --neg-bg: #3D2530;
+    }
+
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html, body { height:100%; }
+    body {
+        background: var(--bg); color: var(--ink); font-family: var(--font-sans);
+        transition: background .2s ease, color .2s ease;
+    }
+
+    /* ══════════ Top App Bar ══════════ */
+    .topbar {
+        position: sticky; top:0; z-index:20;
+        height: 60px; background: var(--topbar-bg); border-bottom: 1px solid var(--border);
+        display:flex; align-items:center; gap:14px; padding:0 16px;
+        box-shadow: var(--elev-1);
+    }
+    .icon-btn {
+        width:40px; height:40px; border-radius:50%; border:none; background:transparent;
+        display:flex; align-items:center; justify-content:center; cursor:pointer; color: var(--ink);
+        transition: background .15s ease;
+    }
+    .icon-btn:hover { background: var(--surface-alt); }
+    .icon-btn svg { width:22px; height:22px; }
+    .topbar .brand { font-weight:900; font-size:18px; letter-spacing:.01em; flex:1; }
+    .topbar .brand span { color: var(--accent); }
+
+    /* ══════════ Drawer (vertical account nav, hamburger-triggered) ══════════ */
+    .scrim {
+        position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:29;
+        opacity:0; pointer-events:none; transition:opacity .2s ease;
+    }
+    .scrim.open { opacity:1; pointer-events:auto; }
+
+    .drawer {
+        position:fixed; top:0; left:0; bottom:0; width:280px; z-index:30;
+        background: var(--drawer-bg); color: var(--drawer-ink);
+        transform: translateX(-100%); transition: transform .22s ease;
+        box-shadow: var(--elev-3);
+        display:flex; flex-direction:column;
+    }
+    .drawer.open { transform: translateX(0); }
+    .drawer-head { padding:20px 18px 14px; border-bottom:1px solid var(--border); }
+    .drawer-head .title { font-weight:900; font-size:16px; }
+    .drawer-head .subtitle { font-size:12px; color:var(--drawer-muted); margin-top:2px; }
+    .drawer-list { list-style:none; padding:10px; overflow-y:auto; flex:1; }
+    .drawer-item {
+        display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:var(--radius-m);
+        cursor:pointer; margin-bottom:4px; transition: background .15s ease;
+    }
+    .drawer-item:hover { background: var(--surface-alt); }
+    .drawer-item.active { background: var(--drawer-active-bg); }
+    .avatar {
+        width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+        font-weight:700; font-size:13px; color:#221F2E; flex-shrink:0;
+    }
+    .drawer-item .meta { flex:1; min-width:0; }
+    .drawer-item .name { font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .drawer-item .sub { font-size:11px; color:var(--drawer-muted); margin-top:1px; }
+    .chip { font-size:9.5px; font-weight:700; padding:2px 8px; border-radius:20px; letter-spacing:.03em; }
+    .chip.active { background: var(--pos-bg); color: var(--pos); }
+    .chip.breached { background: var(--neg-bg); color: var(--neg); }
+    .chip.passed { background: var(--pastel-lemon); color: #7A5C00; }
+    .drawer-add {
+        margin:8px 10px 16px; padding:12px; border-radius:var(--radius-m);
+        border:1.5px dashed var(--border); color:var(--drawer-muted); text-align:center;
+        font-size:13px; font-weight:600; cursor:pointer;
+    }
+    .drawer-add:hover { background: var(--surface-alt); }
+    .drawer-foot { padding:14px 18px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+    .theme-toggle { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--drawer-muted); }
+    .switch {
+        width:40px; height:22px; border-radius:20px; background: var(--surface-alt); position:relative; cursor:pointer;
+        border: 1px solid var(--border);
+    }
+    .switch .knob {
+        width:16px; height:16px; border-radius:50%; background: var(--accent); position:absolute; top:2px; left:2px;
+        transition: left .18s ease;
+    }
+    body[data-theme="dark"] .switch .knob { left: 20px; }
+
+    /* ══════════ Main ══════════ */
+    main { max-width: 900px; margin:0 auto; padding:22px 18px 80px; }
+
+    .balance-card {
+        background: var(--surface); border-radius: var(--radius-l); box-shadow: var(--elev-2);
+        padding:24px; margin-bottom:18px; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px;
+    }
+    .balance-main .label { font-size:12px; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.05em; }
+    .balance-main .figure { font-family:var(--font-mono); font-size:38px; font-weight:700; color:var(--pos); }
+    .balance-meta { display:flex; gap:22px; flex-wrap:wrap; }
+    .balance-meta .item .label { font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:3px; }
+    .balance-meta .item .value { font-family:var(--font-mono); font-size:15px; font-weight:600; }
+    .balance-meta .item .value.pos { color:var(--pos); }
+
+    .rules-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:18px; }
+    .rule-card { background:var(--surface); border-radius:var(--radius-m); box-shadow:var(--elev-1); padding:16px 18px; }
+    .rule-card .title { font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-bottom:8px; }
+    .rule-card .figures { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:9px; }
+    .rule-card .current { font-family:var(--font-mono); font-size:18px; font-weight:700; }
+    .rule-card .target { font-family:var(--font-mono); font-size:12px; color:var(--muted); }
+    .bar-track { height:8px; background:var(--surface-alt); border-radius:20px; overflow:hidden; }
+    .bar-fill { height:100%; border-radius:20px; }
+    .bar-fill.c-mint { background: linear-gradient(90deg, var(--pastel-mint), #6FCB93); }
+    .bar-fill.c-lemon { background: linear-gradient(90deg, var(--pastel-lemon), #E8C24A); }
+    .bar-fill.c-pink { background: linear-gradient(90deg, var(--pastel-pink), #E5789F); }
+    .rule-card .footnote { font-size:10.5px; color:var(--muted); margin-top:7px; font-style:italic; }
+
+    .panel { background:var(--surface); border-radius:var(--radius-m); box-shadow:var(--elev-1); padding:18px 20px; margin-bottom:18px; }
+    .panel-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px; }
+    .panel-head h3 { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+    .chart-placeholder {
+        height:200px; border-radius:var(--radius-s); display:flex; align-items:center; justify-content:center;
+        color:var(--muted); font-size:13px; background: var(--surface-alt);
+    }
+
+    .btn {
+        font-family:var(--font-sans); font-weight:600; font-size:13px; padding:9px 16px; border-radius:20px;
+        border:none; cursor:pointer; transition:filter .15s ease;
+    }
+    .btn.primary { background:var(--accent); color:var(--accent-ink); box-shadow:var(--elev-1); }
+    .btn.primary:hover { filter:brightness(1.06); }
+    .btn.ghost { background:var(--surface-alt); color:var(--ink); }
+    .btn.ghost:hover { filter:brightness(0.97); }
+
+    /* ── Trades table — trimmed columns, no overflow ── */
+    .table-wrap { overflow-x:auto; border-radius:var(--radius-s); }
+    table { width:100%; border-collapse:collapse; table-layout:fixed; }
+    thead th {
+        text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
+        font-weight:700; padding:9px 10px; border-bottom:1px solid var(--border);
+    }
+    thead th:last-child, tbody td:last-child { text-align:right; }
+    tbody td { padding:12px 10px; font-size:13.5px; border-bottom:1px solid var(--border); }
+    tbody tr:hover { background: var(--surface-alt); }
+    td.mono { font-family:var(--font-mono); }
+    .side-pill { font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; }
+    .side-pill.buy { background: var(--pos-bg); color: var(--pos); }
+    .side-pill.sell { background: var(--neg-bg); color: var(--neg); }
+    .pnl-pos { color: var(--pos); font-weight:700; font-family:var(--font-mono); }
+    .pnl-neg { color: var(--neg); font-weight:700; font-family:var(--font-mono); }
+
+    .fab {
+        position:fixed; bottom:22px; right:22px; width:56px; height:56px; border-radius:50%;
+        background: var(--accent); color: var(--accent-ink); border:none; box-shadow:var(--elev-3);
+        display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:15;
+    }
+    .fab svg { width:24px; height:24px; }
+
+    @media (max-width:700px) {
+        .rules-grid { grid-template-columns:1fr; }
+        .balance-card { flex-direction:column; align-items:flex-start; }
+    }
+</style>
+</head>
+<body data-theme="light">
+
+<div class="scrim" id="scrim" onclick="toggleDrawer(false)"></div>
+
+<!-- ══════════ Drawer ══════════ -->
+<nav class="drawer" id="drawer">
+    <div class="drawer-head">
+        <div class="title">Accounts</div>
+        <div class="subtitle">Switch between tracked accounts</div>
+    </div>
+    <ul class="drawer-list">
+        <li class="drawer-item active">
+            <div class="avatar" style="background:var(--pastel-lav);">FT</div>
+            <div class="meta">
+                <div class="name">FTMO — Phase 2</div>
+                <div class="sub">Prop Firm</div>
+            </div>
+            <span class="chip active">Active</span>
+        </li>
+        <li class="drawer-item">
+            <div class="avatar" style="background:var(--pastel-sky);">IC</div>
+            <div class="meta">
+                <div class="name">IC Markets</div>
+                <div class="sub">Personal</div>
+            </div>
+        </li>
+        <li class="drawer-item">
+            <div class="avatar" style="background:var(--pastel-peach);">TF</div>
+            <div class="meta">
+                <div class="name">The Funded Trader</div>
+                <div class="sub">Prop Firm — Funded</div>
+            </div>
+            <span class="chip breached">Breached</span>
+        </li>
+    </ul>
+    <div class="drawer-add" onclick="alert('Add account flow')">+ Add Account</div>
+    <div class="drawer-foot">
+        <div class="theme-toggle">
+            <span id="themeLabel">Light mode</span>
+        </div>
+        <div class="switch" id="themeSwitch" onclick="toggleTheme()"><div class="knob"></div></div>
+    </div>
+</nav>
+
+<!-- ══════════ Top App Bar ══════════ -->
+<div class="topbar">
+    <button class="icon-btn" onclick="toggleDrawer(true)" aria-label="Open accounts">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="brand">PnL <span>Tracker</span> — FTMO Phase 2</div>
+    <button class="btn ghost">Sync</button>
+</div>
+
+<main>
+
+    <div class="balance-card">
+        <div class="balance-main">
+            <div class="label">Current Balance</div>
+            <div class="figure">$104,230.50</div>
+        </div>
+        <div class="balance-meta">
+            <div class="item"><div class="label">Starting</div><div class="value">$100,000.00</div></div>
+            <div class="item"><div class="label">Net Change</div><div class="value pos">+$4,230.50 (+4.23%)</div></div>
+            <div class="item"><div class="label">Since</div><div class="value">Jun 1, 2026</div></div>
+        </div>
+    </div>
+
+    <div class="rules-grid">
+        <div class="rule-card">
+            <div class="title">Profit Target</div>
+            <div class="figures"><span class="current">$4,230</span><span class="target">of $10,000</span></div>
+            <div class="bar-track"><div class="bar-fill c-mint" style="width:42%;"></div></div>
+            <div class="footnote">42% complete — verify with firm</div>
+        </div>
+        <div class="rule-card">
+            <div class="title">Max Drawdown (Trailing)</div>
+            <div class="figures"><span class="current">$2,100</span><span class="target">of $8,000</span></div>
+            <div class="bar-track"><div class="bar-fill c-lemon" style="width:26%;"></div></div>
+            <div class="footnote">26% of buffer used</div>
+        </div>
+        <div class="rule-card">
+            <div class="title">Daily Loss Limit</div>
+            <div class="figures"><span class="current">$0</span><span class="target">of $5,000</span></div>
+            <div class="bar-track"><div class="bar-fill c-pink" style="width:0%;"></div></div>
+            <div class="footnote">Resets at broker's daily reset time</div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-head">
+            <h3>Equity Curve</h3>
+            <span style="font-size:12px;color:var(--muted);">Balance over time</span>
+        </div>
+        <div class="chart-placeholder">[ equity curve chart renders here ]</div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-head">
+            <h3>Trades — FTMO Phase 2</h3>
+            <span style="font-size:12px;color:var(--muted);">Synced from journal</span>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>Asset</th><th>Side</th><th class="mono">Lots</th><th class="mono">P&amp;L</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>XAUUSD</td>
+                        <td><span class="side-pill buy">Buy</span></td>
+                        <td class="mono">0.50</td>
+                        <td class="mono pnl-pos">+$380.00</td>
+                    </tr>
+                    <tr>
+                        <td>EURUSD</td>
+                        <td><span class="side-pill sell">Sell</span></td>
+                        <td class="mono">1.00</td>
+                        <td class="mono pnl-neg">-$170.00</td>
+                    </tr>
+                    <tr>
+                        <td>GBPUSD</td>
+                        <td><span class="side-pill buy">Buy</span></td>
+                        <td class="mono">0.75</td>
+                        <td class="mono pnl-pos">+$412.50</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</main>
+
+<button class="fab" onclick="alert('Add account flow')" aria-label="Add account">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+</button>
+
+<script>
+    function toggleDrawer(open) {
+        document.getElementById('drawer').classList.toggle('open', open);
+        document.getElementById('scrim').classList.toggle('open', open);
+    }
+    function toggleTheme() {
+        const body = document.body;
+        const isDark = body.getAttribute('data-theme') === 'dark';
+        body.setAttribute('data-theme', isDark ? 'light' : 'dark');
+        document.getElementById('themeLabel').textContent = isDark ? 'Light mode' : 'Dark mode';
+    }
+    document.querySelectorAll('.drawer-item').forEach(el => {
+        el.addEventListener('click', () => {
+            document.querySelectorAll('.drawer-item').forEach(x => x.classList.remove('active'));
+            el.classList.add('active');
+            toggleDrawer(false);
+        });
+    });
+</script>
+
+</body>
+</html>
