@@ -6,161 +6,85 @@
 <title>PnL Tracker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
     :root {
-        --font-sans: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-        --font-mono: 'Roboto Mono', ui-monospace, monospace;
-
-        --radius-s: 8px;
-        --radius-m: 14px;
-        --radius-l: 20px;
-
-        --elev-1: 0 1px 3px rgba(0,0,0,.10), 0 1px 2px rgba(0,0,0,.06);
-        --elev-2: 0 4px 10px rgba(0,0,0,.10), 0 2px 4px rgba(0,0,0,.06);
-        --elev-3: 0 10px 24px rgba(0,0,0,.14), 0 4px 8px rgba(0,0,0,.08);
-
-        /* pastel accent set — shared across themes */
-        --pastel-lav: #C9B6F5;
-        --pastel-mint: #A8E6C1;
-        --pastel-sky: #A9DDF3;
-        --pastel-peach: #FFCBA4;
-        --pastel-pink: #FFB8D9;
-        --pastel-lemon: #FFE79A;
+        --font-sans:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+        --font-mono:'Roboto Mono',ui-monospace,monospace;
+        --radius-s:8px; --radius-m:14px; --radius-l:20px;
+        --elev-1:0 1px 3px rgba(0,0,0,.10),0 1px 2px rgba(0,0,0,.06);
+        --elev-2:0 4px 10px rgba(0,0,0,.10),0 2px 4px rgba(0,0,0,.06);
+        --elev-3:0 10px 24px rgba(0,0,0,.14),0 4px 8px rgba(0,0,0,.08);
+        --pastel-lav:#C9B6F5; --pastel-mint:#A8E6C1; --pastel-sky:#A9DDF3;
+        --pastel-peach:#FFCBA4; --pastel-pink:#FFB8D9; --pastel-lemon:#FFE79A;
     }
-
-    /* ── Light theme (default) ── */
-    body[data-theme="light"] {
-        --bg: #F6F5FB;
-        --surface: #FFFFFF;
-        --surface-alt: #F0EEFA;
-        --ink: #211F2E;
-        --muted: #6E6A80;
-        --border: #E3E0F0;
-        --drawer-bg: #FFFFFF;
-        --drawer-ink: #211F2E;
-        --drawer-muted: #8A85A0;
-        --drawer-active-bg: #EDE7FC;
-        --topbar-bg: #FFFFFF;
-        --accent: #8B6FE0;
-        --accent-ink: #211F2E;
-        --pos: #1E9E5A;
-        --pos-bg: #DCF6E7;
-        --neg: #E0475A;
-        --neg-bg: #FDE1E4;
+    body[data-theme="light"]{
+        --bg:#F6F5FB; --surface:#FFFFFF; --surface-alt:#F0EEFA; --ink:#211F2E; --muted:#6E6A80;
+        --border:#E3E0F0; --drawer-bg:#FFFFFF; --drawer-ink:#211F2E; --drawer-muted:#8A85A0;
+        --drawer-active-bg:#EDE7FC; --topbar-bg:#FFFFFF; --accent:#8B6FE0; --accent-ink:#211F2E;
+        --pos:#1E9E5A; --pos-bg:#DCF6E7; --neg:#E0475A; --neg-bg:#FDE1E4;
     }
-
-    /* ── Dark theme ── */
-    body[data-theme="dark"] {
-        --bg: #17151F;
-        --surface: #221F2E;
-        --surface-alt: #2A2739;
-        --ink: #F1EFFA;
-        --muted: #A79FC2;
-        --border: #35314A;
-        --drawer-bg: #1C1A26;
-        --drawer-ink: #F1EFFA;
-        --drawer-muted: #918AAD;
-        --drawer-active-bg: #322B4D;
-        --topbar-bg: #1C1A26;
-        --accent: #C9B6F5;
-        --accent-ink: #17151F;
-        --pos: #7FE0A8;
-        --pos-bg: #1E3A2B;
-        --neg: #FF9AA8;
-        --neg-bg: #3D2530;
+    body[data-theme="dark"]{
+        --bg:#17151F; --surface:#221F2E; --surface-alt:#2A2739; --ink:#F1EFFA; --muted:#A79FC2;
+        --border:#35314A; --drawer-bg:#1C1A26; --drawer-ink:#F1EFFA; --drawer-muted:#918AAD;
+        --drawer-active-bg:#322B4D; --topbar-bg:#1C1A26; --accent:#C9B6F5; --accent-ink:#17151F;
+        --pos:#7FE0A8; --pos-bg:#1E3A2B; --neg:#FF9AA8; --neg-bg:#3D2530;
     }
-
     * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-    html, body { height:100%; }
-    body {
-        background: var(--bg); color: var(--ink); font-family: var(--font-sans);
-        transition: background .2s ease, color .2s ease;
-    }
+    html,body { height:100%; }
+    body { background:var(--bg); color:var(--ink); font-family:var(--font-sans); transition:background .2s,color .2s; }
 
-    /* ══════════ Top App Bar ══════════ */
-    .topbar {
-        position: sticky; top:0; z-index:20;
-        height: 60px; background: var(--topbar-bg); border-bottom: 1px solid var(--border);
-        display:flex; align-items:center; gap:14px; padding:0 16px;
-        box-shadow: var(--elev-1);
-    }
-    .icon-btn {
-        width:40px; height:40px; border-radius:50%; border:none; background:transparent;
-        display:flex; align-items:center; justify-content:center; cursor:pointer; color: var(--ink);
-        transition: background .15s ease;
-    }
-    .icon-btn:hover { background: var(--surface-alt); }
+    .topbar { position:sticky; top:0; z-index:20; height:60px; background:var(--topbar-bg); border-bottom:1px solid var(--border);
+        display:flex; align-items:center; gap:14px; padding:0 16px; box-shadow:var(--elev-1); }
+    .icon-btn { width:40px; height:40px; border-radius:50%; border:none; background:transparent; display:flex;
+        align-items:center; justify-content:center; cursor:pointer; color:var(--ink); }
+    .icon-btn:hover { background:var(--surface-alt); }
     .icon-btn svg { width:22px; height:22px; }
-    .topbar .brand { font-weight:900; font-size:18px; letter-spacing:.01em; flex:1; }
-    .topbar .brand span { color: var(--accent); }
+    .topbar .brand { font-weight:900; font-size:17px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .topbar .brand span { color:var(--accent); }
 
-    /* ══════════ Drawer (vertical account nav, hamburger-triggered) ══════════ */
-    .scrim {
-        position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:29;
-        opacity:0; pointer-events:none; transition:opacity .2s ease;
-    }
+    .scrim { position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:29; opacity:0; pointer-events:none; transition:opacity .2s; }
     .scrim.open { opacity:1; pointer-events:auto; }
-
-    .drawer {
-        position:fixed; top:0; left:0; bottom:0; width:280px; z-index:30;
-        background: var(--drawer-bg); color: var(--drawer-ink);
-        transform: translateX(-100%); transition: transform .22s ease;
-        box-shadow: var(--elev-3);
-        display:flex; flex-direction:column;
-    }
-    .drawer.open { transform: translateX(0); }
+    .drawer { position:fixed; top:0; left:0; bottom:0; width:280px; z-index:30; background:var(--drawer-bg); color:var(--drawer-ink);
+        transform:translateX(-100%); transition:transform .22s ease; box-shadow:var(--elev-3); display:flex; flex-direction:column; }
+    .drawer.open { transform:translateX(0); }
     .drawer-head { padding:20px 18px 14px; border-bottom:1px solid var(--border); }
     .drawer-head .title { font-weight:900; font-size:16px; }
     .drawer-head .subtitle { font-size:12px; color:var(--drawer-muted); margin-top:2px; }
     .drawer-list { list-style:none; padding:10px; overflow-y:auto; flex:1; }
-    .drawer-item {
-        display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:var(--radius-m);
-        cursor:pointer; margin-bottom:4px; transition: background .15s ease;
-    }
-    .drawer-item:hover { background: var(--surface-alt); }
-    .drawer-item.active { background: var(--drawer-active-bg); }
-    .avatar {
-        width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-        font-weight:700; font-size:13px; color:#221F2E; flex-shrink:0;
-    }
+    .drawer-item { display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:var(--radius-m); cursor:pointer; margin-bottom:4px; }
+    .drawer-item:hover { background:var(--surface-alt); }
+    .drawer-item.active { background:var(--drawer-active-bg); }
+    .avatar { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; color:#221F2E; flex-shrink:0; }
     .drawer-item .meta { flex:1; min-width:0; }
     .drawer-item .name { font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .drawer-item .sub { font-size:11px; color:var(--drawer-muted); margin-top:1px; }
-    .chip { font-size:9.5px; font-weight:700; padding:2px 8px; border-radius:20px; letter-spacing:.03em; }
-    .chip.active { background: var(--pos-bg); color: var(--pos); }
-    .chip.breached { background: var(--neg-bg); color: var(--neg); }
-    .chip.passed { background: var(--pastel-lemon); color: #7A5C00; }
-    .drawer-add {
-        margin:8px 10px 16px; padding:12px; border-radius:var(--radius-m);
-        border:1.5px dashed var(--border); color:var(--drawer-muted); text-align:center;
-        font-size:13px; font-weight:600; cursor:pointer;
-    }
-    .drawer-add:hover { background: var(--surface-alt); }
+    .chip { font-size:9.5px; font-weight:700; padding:2px 8px; border-radius:20px; }
+    .chip.active { background:var(--pos-bg); color:var(--pos); }
+    .chip.breached { background:var(--neg-bg); color:var(--neg); }
+    .chip.passed { background:var(--pastel-lemon); color:#7A5C00; }
+    .drawer-add { margin:8px 10px 16px; padding:12px; border-radius:var(--radius-m); border:1.5px dashed var(--border);
+        color:var(--drawer-muted); text-align:center; font-size:13px; font-weight:600; cursor:pointer; }
+    .drawer-add:hover { background:var(--surface-alt); }
     .drawer-foot { padding:14px 18px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+    .drawer-foot .signout { font-size:12px; color:var(--muted); cursor:pointer; }
     .theme-toggle { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--drawer-muted); }
-    .switch {
-        width:40px; height:22px; border-radius:20px; background: var(--surface-alt); position:relative; cursor:pointer;
-        border: 1px solid var(--border);
-    }
-    .switch .knob {
-        width:16px; height:16px; border-radius:50%; background: var(--accent); position:absolute; top:2px; left:2px;
-        transition: left .18s ease;
-    }
-    body[data-theme="dark"] .switch .knob { left: 20px; }
+    .switch { width:40px; height:22px; border-radius:20px; background:var(--surface-alt); position:relative; cursor:pointer; border:1px solid var(--border); }
+    .switch .knob { width:16px; height:16px; border-radius:50%; background:var(--accent); position:absolute; top:2px; left:2px; transition:left .18s; }
+    body[data-theme="dark"] .switch .knob { left:20px; }
 
-    /* ══════════ Main ══════════ */
-    main { max-width: 900px; margin:0 auto; padding:22px 18px 80px; }
-
-    .balance-card {
-        background: var(--surface); border-radius: var(--radius-l); box-shadow: var(--elev-2);
-        padding:24px; margin-bottom:18px; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px;
-    }
+    main { max-width:900px; margin:0 auto; padding:22px 18px 80px; }
+    .balance-card { background:var(--surface); border-radius:var(--radius-l); box-shadow:var(--elev-2); padding:24px; margin-bottom:18px;
+        display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px; }
     .balance-main .label { font-size:12px; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.05em; }
-    .balance-main .figure { font-family:var(--font-mono); font-size:38px; font-weight:700; color:var(--pos); }
+    .balance-main .figure { font-family:var(--font-mono); font-size:38px; font-weight:700; }
+    .balance-main .figure.pos { color:var(--pos); }
+    .balance-main .figure.neg { color:var(--neg); }
     .balance-meta { display:flex; gap:22px; flex-wrap:wrap; }
     .balance-meta .item .label { font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:3px; }
     .balance-meta .item .value { font-family:var(--font-mono); font-size:15px; font-weight:600; }
     .balance-meta .item .value.pos { color:var(--pos); }
+    .balance-meta .item .value.neg { color:var(--neg); }
 
     .rules-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:18px; }
     .rule-card { background:var(--surface); border-radius:var(--radius-m); box-shadow:var(--elev-1); padding:16px 18px; }
@@ -170,213 +94,578 @@
     .rule-card .target { font-family:var(--font-mono); font-size:12px; color:var(--muted); }
     .bar-track { height:8px; background:var(--surface-alt); border-radius:20px; overflow:hidden; }
     .bar-fill { height:100%; border-radius:20px; }
-    .bar-fill.c-mint { background: linear-gradient(90deg, var(--pastel-mint), #6FCB93); }
-    .bar-fill.c-lemon { background: linear-gradient(90deg, var(--pastel-lemon), #E8C24A); }
-    .bar-fill.c-pink { background: linear-gradient(90deg, var(--pastel-pink), #E5789F); }
+    .bar-fill.c-mint { background:linear-gradient(90deg,var(--pastel-mint),#6FCB93); }
+    .bar-fill.c-lemon { background:linear-gradient(90deg,var(--pastel-lemon),#E8C24A); }
+    .bar-fill.c-pink { background:linear-gradient(90deg,var(--pastel-pink),#E5789F); }
     .rule-card .footnote { font-size:10.5px; color:var(--muted); margin-top:7px; font-style:italic; }
 
     .panel { background:var(--surface); border-radius:var(--radius-m); box-shadow:var(--elev-1); padding:18px 20px; margin-bottom:18px; }
     .panel-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px; }
     .panel-head h3 { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
-    .chart-placeholder {
-        height:200px; border-radius:var(--radius-s); display:flex; align-items:center; justify-content:center;
-        color:var(--muted); font-size:13px; background: var(--surface-alt);
-    }
+    .chart-placeholder { height:200px; border-radius:var(--radius-s); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:13px; background:var(--surface-alt); }
 
-    .btn {
-        font-family:var(--font-sans); font-weight:600; font-size:13px; padding:9px 16px; border-radius:20px;
-        border:none; cursor:pointer; transition:filter .15s ease;
-    }
+    .btn { font-family:var(--font-sans); font-weight:600; font-size:13px; padding:9px 16px; border-radius:20px; border:none; cursor:pointer; }
     .btn.primary { background:var(--accent); color:var(--accent-ink); box-shadow:var(--elev-1); }
     .btn.primary:hover { filter:brightness(1.06); }
     .btn.ghost { background:var(--surface-alt); color:var(--ink); }
-    .btn.ghost:hover { filter:brightness(0.97); }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
 
-    /* ── Trades table — trimmed columns, no overflow ── */
     .table-wrap { overflow-x:auto; border-radius:var(--radius-s); }
     table { width:100%; border-collapse:collapse; table-layout:fixed; }
-    thead th {
-        text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
-        font-weight:700; padding:9px 10px; border-bottom:1px solid var(--border);
-    }
+    thead th { text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:700; padding:9px 10px; border-bottom:1px solid var(--border); }
     thead th:last-child, tbody td:last-child { text-align:right; }
     tbody td { padding:12px 10px; font-size:13.5px; border-bottom:1px solid var(--border); }
-    tbody tr:hover { background: var(--surface-alt); }
+    tbody tr:hover { background:var(--surface-alt); }
     td.mono { font-family:var(--font-mono); }
     .side-pill { font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; }
-    .side-pill.buy { background: var(--pos-bg); color: var(--pos); }
-    .side-pill.sell { background: var(--neg-bg); color: var(--neg); }
-    .pnl-pos { color: var(--pos); font-weight:700; font-family:var(--font-mono); }
-    .pnl-neg { color: var(--neg); font-weight:700; font-family:var(--font-mono); }
+    .side-pill.buy { background:var(--pos-bg); color:var(--pos); }
+    .side-pill.sell { background:var(--neg-bg); color:var(--neg); }
+    .pnl-pos { color:var(--pos); font-weight:700; font-family:var(--font-mono); }
+    .pnl-neg { color:var(--neg); font-weight:700; font-family:var(--font-mono); }
+    .empty-note { text-align:center; padding:24px; color:var(--muted); font-size:13px; }
 
-    .fab {
-        position:fixed; bottom:22px; right:22px; width:56px; height:56px; border-radius:50%;
-        background: var(--accent); color: var(--accent-ink); border:none; box-shadow:var(--elev-3);
-        display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:15;
-    }
+    .fab { position:fixed; bottom:22px; right:22px; width:56px; height:56px; border-radius:50%; background:var(--accent);
+        color:var(--accent-ink); border:none; box-shadow:var(--elev-3); display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:15; }
     .fab svg { width:24px; height:24px; }
 
-    @media (max-width:700px) {
-        .rules-grid { grid-template-columns:1fr; }
-        .balance-card { flex-direction:column; align-items:flex-start; }
-    }
+    /* Modal */
+    .modal-scrim { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:39; display:none; align-items:center; justify-content:center; padding:16px; }
+    .modal-scrim.open { display:flex; }
+    .modal { background:var(--surface); border-radius:var(--radius-l); box-shadow:var(--elev-3); width:100%; max-width:440px; max-height:88vh; overflow-y:auto; padding:24px; }
+    .modal h3 { font-size:16px; font-weight:800; margin-bottom:4px; }
+    .modal .sub { font-size:12px; color:var(--muted); margin-bottom:18px; }
+    .field { margin-bottom:14px; }
+    .field label { font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); display:block; margin-bottom:6px; }
+    .field input, .field select { width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--ink); font-family:var(--font-sans); font-size:13.5px; }
+    .kind-toggle { display:flex; gap:8px; margin-bottom:14px; }
+    .kind-toggle button { flex:1; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--ink); font-weight:600; font-size:13px; cursor:pointer; }
+    .kind-toggle button.sel { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+    .ai-tag { font-size:9.5px; font-weight:700; color:var(--accent); margin-left:6px; }
+    .review-banner { background:var(--surface-alt); border-radius:8px; padding:10px 12px; font-size:11.5px; color:var(--muted); margin-bottom:14px; }
+    .modal-actions { display:flex; gap:10px; margin-top:18px; }
+    .modal-actions .btn { flex:1; }
+    .login-card { background:var(--surface); border-radius:var(--radius-l); box-shadow:var(--elev-2); padding:32px; width:320px; }
+    .center-screen { min-height:100vh; display:flex; align-items:center; justify-content:center; }
+    .msg { font-size:12px; margin-top:8px; }
+    .msg.err { color:var(--neg); }
+    .msg.ok { color:var(--pos); }
+
+    @media (max-width:700px) { .rules-grid { grid-template-columns:1fr; } .balance-card { flex-direction:column; align-items:flex-start; } }
 </style>
 </head>
 <body data-theme="light">
 
-<div class="scrim" id="scrim" onclick="toggleDrawer(false)"></div>
-
-<!-- ══════════ Drawer ══════════ -->
-<nav class="drawer" id="drawer">
-    <div class="drawer-head">
-        <div class="title">Accounts</div>
-        <div class="subtitle">Switch between tracked accounts</div>
+<!-- ══════════ LOGIN ══════════ -->
+<div class="center-screen" id="loginScreen">
+    <div class="login-card">
+        <h3 style="margin-bottom:4px;">PnL Tracker</h3>
+        <div class="sub" style="margin-bottom:18px;color:var(--muted);font-size:12px;">Sign in with your journal account</div>
+        <div class="field"><label>Email</label><input type="email" id="loginEmail"></div>
+        <div class="field"><label>Password</label><input type="password" id="loginPassword"></div>
+        <button class="btn primary" style="width:100%;" onclick="doLogin()">Sign in</button>
+        <div class="msg err" id="loginMsg"></div>
     </div>
-    <ul class="drawer-list">
-        <li class="drawer-item active">
-            <div class="avatar" style="background:var(--pastel-lav);">FT</div>
-            <div class="meta">
-                <div class="name">FTMO — Phase 2</div>
-                <div class="sub">Prop Firm</div>
-            </div>
-            <span class="chip active">Active</span>
-        </li>
-        <li class="drawer-item">
-            <div class="avatar" style="background:var(--pastel-sky);">IC</div>
-            <div class="meta">
-                <div class="name">IC Markets</div>
-                <div class="sub">Personal</div>
-            </div>
-        </li>
-        <li class="drawer-item">
-            <div class="avatar" style="background:var(--pastel-peach);">TF</div>
-            <div class="meta">
-                <div class="name">The Funded Trader</div>
-                <div class="sub">Prop Firm — Funded</div>
-            </div>
-            <span class="chip breached">Breached</span>
-        </li>
-    </ul>
-    <div class="drawer-add" onclick="alert('Add account flow')">+ Add Account</div>
-    <div class="drawer-foot">
-        <div class="theme-toggle">
-            <span id="themeLabel">Light mode</span>
-        </div>
-        <div class="switch" id="themeSwitch" onclick="toggleTheme()"><div class="knob"></div></div>
-    </div>
-</nav>
-
-<!-- ══════════ Top App Bar ══════════ -->
-<div class="topbar">
-    <button class="icon-btn" onclick="toggleDrawer(true)" aria-label="Open accounts">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-    </button>
-    <div class="brand">PnL <span>Tracker</span> — FTMO Phase 2</div>
-    <button class="btn ghost">Sync</button>
 </div>
 
-<main>
+<!-- ══════════ APP ══════════ -->
+<div id="app" style="display:none;">
+    <div class="scrim" id="scrim" onclick="toggleDrawer(false)"></div>
 
-    <div class="balance-card">
-        <div class="balance-main">
-            <div class="label">Current Balance</div>
-            <div class="figure">$104,230.50</div>
+    <nav class="drawer" id="drawer">
+        <div class="drawer-head">
+            <div class="title">Accounts</div>
+            <div class="subtitle">Switch between tracked accounts</div>
         </div>
-        <div class="balance-meta">
-            <div class="item"><div class="label">Starting</div><div class="value">$100,000.00</div></div>
-            <div class="item"><div class="label">Net Change</div><div class="value pos">+$4,230.50 (+4.23%)</div></div>
-            <div class="item"><div class="label">Since</div><div class="value">Jun 1, 2026</div></div>
+        <ul class="drawer-list" id="drawerList"></ul>
+        <div class="drawer-add" onclick="openAddAccountModal()">+ Add Account</div>
+        <div class="drawer-foot">
+            <span class="signout" onclick="doLogout()">Sign out</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span id="themeLabel" style="font-size:12px;color:var(--drawer-muted);">Light mode</span>
+                <div class="switch" id="themeSwitch" onclick="toggleTheme()"><div class="knob"></div></div>
+            </div>
         </div>
+    </nav>
+
+    <div class="topbar">
+        <button class="icon-btn" onclick="toggleDrawer(true)" aria-label="Open accounts">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="brand">PnL <span>Tracker</span> <span id="activeAccountLabel"></span></div>
+        <button class="btn ghost" onclick="syncFromJournal()" id="syncBtn">Sync</button>
     </div>
 
-    <div class="rules-grid">
-        <div class="rule-card">
-            <div class="title">Profit Target</div>
-            <div class="figures"><span class="current">$4,230</span><span class="target">of $10,000</span></div>
-            <div class="bar-track"><div class="bar-fill c-mint" style="width:42%;"></div></div>
-            <div class="footnote">42% complete — verify with firm</div>
+    <main>
+        <div class="balance-card">
+            <div class="balance-main">
+                <div class="label">Current Balance</div>
+                <div class="figure" id="balFigure">—</div>
+            </div>
+            <div class="balance-meta">
+                <div class="item"><div class="label">Starting</div><div class="value" id="balStart">—</div></div>
+                <div class="item"><div class="label">Net Change</div><div class="value" id="balChange">—</div></div>
+            </div>
         </div>
-        <div class="rule-card">
-            <div class="title">Max Drawdown (Trailing)</div>
-            <div class="figures"><span class="current">$2,100</span><span class="target">of $8,000</span></div>
-            <div class="bar-track"><div class="bar-fill c-lemon" style="width:26%;"></div></div>
-            <div class="footnote">26% of buffer used</div>
+
+        <div class="rules-grid" id="rulesGrid" style="display:none;">
+            <div class="rule-card">
+                <div class="title">Profit Target</div>
+                <div class="figures"><span class="current" id="rtCurrent">$0</span><span class="target" id="rtTarget">of $0</span></div>
+                <div class="bar-track"><div class="bar-fill c-mint" id="rtBar" style="width:0%;"></div></div>
+                <div class="footnote">As configured — verify with firm</div>
+            </div>
+            <div class="rule-card">
+                <div class="title" id="ddTitle">Max Drawdown</div>
+                <div class="figures"><span class="current" id="ddCurrent">$0</span><span class="target" id="ddTarget">of $0</span></div>
+                <div class="bar-track"><div class="bar-fill c-lemon" id="ddBar" style="width:0%;"></div></div>
+                <div class="footnote">As configured — verify with firm</div>
+            </div>
+            <div class="rule-card">
+                <div class="title">Daily Loss Limit</div>
+                <div class="figures"><span class="current" id="dlCurrent">$0</span><span class="target" id="dlTarget">of $0</span></div>
+                <div class="bar-track"><div class="bar-fill c-pink" id="dlBar" style="width:0%;"></div></div>
+                <div class="footnote">Resets at broker's daily reset time</div>
+            </div>
         </div>
-        <div class="rule-card">
-            <div class="title">Daily Loss Limit</div>
-            <div class="figures"><span class="current">$0</span><span class="target">of $5,000</span></div>
-            <div class="bar-track"><div class="bar-fill c-pink" style="width:0%;"></div></div>
-            <div class="footnote">Resets at broker's daily reset time</div>
+
+        <div class="panel">
+            <div class="panel-head"><h3>Equity Curve</h3><span style="font-size:12px;color:var(--muted);">Balance over time</span></div>
+            <div class="chart-placeholder">[ equity curve — coming once trade history builds up ]</div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-head">
+                <h3 id="tradesHeading">Trades</h3>
+                <span style="font-size:12px;color:var(--muted);" id="syncNote">Not synced yet</span>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Asset</th><th>Side</th><th class="mono">Lots</th><th class="mono">P&amp;L</th></tr></thead>
+                    <tbody id="tradesBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <button class="fab" onclick="openAddAccountModal()" aria-label="Add account">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+</div>
+
+<!-- ══════════ ADD ACCOUNT MODAL ══════════ -->
+<div class="modal-scrim" id="addAccountScrim">
+    <div class="modal">
+        <h3>Add Account</h3>
+        <div class="sub">Step 1 of 2 — basic setup</div>
+
+        <div class="kind-toggle">
+            <button id="kindPropBtn" class="sel" onclick="setAccountKind('prop')">Prop Firm</button>
+            <button id="kindPersonalBtn" onclick="setAccountKind('personal')">Personal</button>
+        </div>
+
+        <div class="field"><label>Account Name</label><input id="fName" placeholder="e.g. FTMO Phase 2"></div>
+
+        <div id="propFields">
+            <div class="field"><label>Firm Name</label><input id="fFirm" placeholder="e.g. FTMO"></div>
+            <div class="field"><label>Account Type</label><input id="fAcctType" placeholder="e.g. Phase 1, Phase 2, Funded"></div>
+        </div>
+
+        <div id="personalFields" style="display:none;">
+            <div class="field">
+                <label>Broker</label>
+                <select id="fBroker" onchange="onBrokerChange()">
+                    <option value="IC Markets">IC Markets</option>
+                    <option value="Exness">Exness</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="field"><label>Starting Balance (USD)</label><input id="fStartBal" type="number" placeholder="100000"></div>
+
+        <button class="btn primary" style="width:100%;" id="fetchRulesBtn" onclick="fetchRulesFromWorker()">Fetch Rules</button>
+        <div class="msg" id="fetchMsg"></div>
+
+        <div id="reviewSection" style="display:none;margin-top:18px;">
+            <div class="review-banner">AI-suggested values below — please verify against your firm/broker's own dashboard before saving. Nothing is saved until you confirm.</div>
+            <div class="field"><label>Profit Target % <span class="ai-tag" id="tagTarget">AI</span></label><input id="rTarget" type="number" step="0.1"></div>
+            <div class="field">
+                <label>Drawdown Type <span class="ai-tag" id="tagDDType">AI</span></label>
+                <select id="rDDType"><option value="static">Static</option><option value="trailing">Trailing</option><option value="trailing_to_be">Trailing to breakeven</option></select>
+            </div>
+            <div class="field"><label>Drawdown % <span class="ai-tag" id="tagDD">AI</span></label><input id="rDD" type="number" step="0.1"></div>
+            <div class="field"><label>Daily Loss Limit % <span class="ai-tag" id="tagDaily">AI</span></label><input id="rDaily" type="number" step="0.1"></div>
+            <div class="field"><label>Commission per Lot (USD) <span class="ai-tag" id="tagComm">AI</span></label><input id="rComm" type="number" step="0.01"></div>
+        </div>
+
+        <div class="modal-actions">
+            <button class="btn ghost" onclick="closeAddAccountModal()">Cancel</button>
+            <button class="btn primary" id="confirmSaveBtn" style="display:none;" onclick="confirmSaveAccount()">Confirm &amp; Save</button>
         </div>
     </div>
-
-    <div class="panel">
-        <div class="panel-head">
-            <h3>Equity Curve</h3>
-            <span style="font-size:12px;color:var(--muted);">Balance over time</span>
-        </div>
-        <div class="chart-placeholder">[ equity curve chart renders here ]</div>
-    </div>
-
-    <div class="panel">
-        <div class="panel-head">
-            <h3>Trades — FTMO Phase 2</h3>
-            <span style="font-size:12px;color:var(--muted);">Synced from journal</span>
-        </div>
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr><th>Asset</th><th>Side</th><th class="mono">Lots</th><th class="mono">P&amp;L</th></tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>XAUUSD</td>
-                        <td><span class="side-pill buy">Buy</span></td>
-                        <td class="mono">0.50</td>
-                        <td class="mono pnl-pos">+$380.00</td>
-                    </tr>
-                    <tr>
-                        <td>EURUSD</td>
-                        <td><span class="side-pill sell">Sell</span></td>
-                        <td class="mono">1.00</td>
-                        <td class="mono pnl-neg">-$170.00</td>
-                    </tr>
-                    <tr>
-                        <td>GBPUSD</td>
-                        <td><span class="side-pill buy">Buy</span></td>
-                        <td class="mono">0.75</td>
-                        <td class="mono pnl-pos">+$412.50</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-</main>
-
-<button class="fab" onclick="alert('Add account flow')" aria-label="Add account">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-</button>
+</div>
 
 <script>
-    function toggleDrawer(open) {
-        document.getElementById('drawer').classList.toggle('open', open);
-        document.getElementById('scrim').classList.toggle('open', open);
-    }
-    function toggleTheme() {
-        const body = document.body;
-        const isDark = body.getAttribute('data-theme') === 'dark';
-        body.setAttribute('data-theme', isDark ? 'light' : 'dark');
-        document.getElementById('themeLabel').textContent = isDark ? 'Light mode' : 'Dark mode';
-    }
-    document.querySelectorAll('.drawer-item').forEach(el => {
-        el.addEventListener('click', () => {
-            document.querySelectorAll('.drawer-item').forEach(x => x.classList.remove('active'));
-            el.classList.add('active');
-            toggleDrawer(false);
-        });
-    });
-</script>
+// ═══════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════
+const SUPABASE_URL = "https://klgibccfziktzvlomwve.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtsZ2liY2NmemlrdHp2bG9td3ZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNDY2MTYsImV4cCI6MjA5NTgyMjYxNn0.BdmDWJWJGjytVSTTQYEAeLiYtJCFX4GaGeHpDEvbHEM";
+const GEMINI_WORKER_URL = "https://profit-tracker.aicube-apps.workers.dev/";
 
+// IC Markets preset — published raw-spread commission as of last check.
+// FLAG: verify against ic markets' current published rates before trusting — rates change.
+const IC_MARKETS_PRESET = { commission_per_lot_usd: 7.00, spread_type: "raw_plus_commission", notes: "Preset: $3.50/side round-turn on Raw Spread accounts. Verify on icmarkets.com — last checked by app author, not live." };
+
+// Contract specs for auto P&L calc — FLAG: sanity-check first real trades against broker statement.
+const CONTRACT_SPECS = {
+    XAUUSD: { contractSize: 100, quoteIsUSD: true },
+    EURUSD: { contractSize: 100000, quoteIsUSD: true },
+    GBPUSD: { contractSize: 100000, quoteIsUSD: true },
+    GU:     { contractSize: 100000, quoteIsUSD: true },
+    USDCHF: { contractSize: 100000, quoteIsUSD: false }
+};
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentUser = null;
+let accounts = [];
+let activeAccountId = null;
+let journalTradesCache = [];   // raw trades fetched from journal on last sync
+let addAccountKind = 'prop';
+let lastFetchedRules = null;
+
+// ═══════════════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════════════
+async function doLogin() {
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const msgEl = document.getElementById('loginMsg');
+    msgEl.textContent = '';
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) { msgEl.textContent = error.message; return; }
+    currentUser = data.user;
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    await loadAccounts();
+}
+
+async function doLogout() {
+    await sb.auth.signOut();
+    currentUser = null;
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'flex';
+}
+
+async function checkExistingSession() {
+    const { data } = await sb.auth.getSession();
+    if (data.session) {
+        currentUser = data.session.user;
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+        await loadAccounts();
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// ACCOUNTS: load, render drawer, switch
+// ═══════════════════════════════════════════════════════════
+async function loadAccounts() {
+    const { data, error } = await sb.from('accounts').select('*').order('created_at', { ascending: true });
+    if (error) { console.error(error); return; }
+    accounts = data || [];
+    if (!activeAccountId && accounts.length) activeAccountId = accounts[0].id;
+    renderDrawer();
+    renderActiveAccount();
+}
+
+function renderDrawer() {
+    const list = document.getElementById('drawerList');
+    if (!accounts.length) {
+        list.innerHTML = '<li style="padding:14px;font-size:12.5px;color:var(--drawer-muted);">No accounts yet — tap "+ Add Account" below.</li>';
+        return;
+    }
+    const colors = ['pastel-lav','pastel-sky','pastel-peach','pastel-mint','pastel-pink','pastel-lemon'];
+    list.innerHTML = accounts.map((a, i) => {
+        const initials = a.name.slice(0,2).toUpperCase();
+        const color = `var(--${colors[i % colors.length]})`;
+        const chip = a.status === 'breached' ? '<span class="chip breached">Breached</span>'
+                   : a.status === 'passed' ? '<span class="chip passed">Passed</span>'
+                   : '<span class="chip active">Active</span>';
+        const sub = a.account_kind === 'prop' ? `Prop Firm${a.account_type ? ' — '+a.account_type : ''}` : (a.broker_name || 'Personal');
+        return `<li class="drawer-item ${a.id===activeAccountId?'active':''}" onclick="switchAccount('${a.id}')">
+            <div class="avatar" style="background:${color};">${initials}</div>
+            <div class="meta"><div class="name">${a.name}</div><div class="sub">${sub}</div></div>
+            ${chip}
+        </li>`;
+    }).join('');
+}
+
+function switchAccount(id) {
+    activeAccountId = id;
+    renderDrawer();
+    renderActiveAccount();
+    toggleDrawer(false);
+}
+
+function getActiveAccount() { return accounts.find(a => a.id === activeAccountId); }
+
+async function renderActiveAccount() {
+    const acct = getActiveAccount();
+    const label = document.getElementById('activeAccountLabel');
+    if (!acct) { label.textContent = ''; document.getElementById('rulesGrid').style.display='none'; return; }
+    label.textContent = '— ' + acct.name;
+
+    // Trades assigned to this account
+    const { data: maps } = await sb.from('trade_account_map').select('trade_id').eq('account_id', acct.id);
+    const tradeIds = (maps || []).map(m => m.trade_id);
+
+    let trades = [];
+    if (tradeIds.length) {
+        trades = journalTradesCache.filter(t => tradeIds.includes(t.id));
+        // fallback: if cache doesn't have them (no sync run yet this session), pull directly
+        if (!trades.length) {
+            const { data: fetched } = await sb.from('trades').select(
+                'id,pair,trade_type,entry_price,close_price,lot_size,status'
+            ).in('id', tradeIds);
+            trades = fetched || [];
+        }
+    }
+
+    let netPnl = 0;
+    const rows = trades.map(t => {
+        const pnl = calcPnl(t);
+        netPnl += pnl;
+        const side = normalizeDirection(t.trade_type);
+        return `<tr>
+            <td>${t.pair || '—'}</td>
+            <td><span class="side-pill ${side==='sell'?'sell':'buy'}">${side==='sell'?'Sell':'Buy'}</span></td>
+            <td class="mono">${t.lot_size ?? '—'}</td>
+            <td class="mono ${pnl>=0?'pnl-pos':'pnl-neg'}">${pnl>=0?'+':''}$${pnl.toFixed(2)}</td>
+        </tr>`;
+    }).join('');
+
+    document.getElementById('tradesBody').innerHTML = rows || '<tr><td colspan="4" class="empty-note">No trades assigned to this account yet. Run Sync, then assign trades from the journal.</td></tr>';
+    document.getElementById('tradesHeading').textContent = `Trades — ${acct.name}`;
+
+    const balance = Number(acct.starting_balance) + netPnl;
+    const netChange = balance - Number(acct.starting_balance);
+    document.getElementById('balFigure').textContent = '$' + balance.toFixed(2);
+    document.getElementById('balFigure').className = 'figure ' + (netChange >= 0 ? 'pos' : 'neg');
+    document.getElementById('balStart').textContent = '$' + Number(acct.starting_balance).toFixed(2);
+    const pctChange = (netChange / Number(acct.starting_balance) * 100).toFixed(2);
+    document.getElementById('balChange').textContent = (netChange>=0?'+':'') + '$' + netChange.toFixed(2) + ' (' + (netChange>=0?'+':'') + pctChange + '%)';
+    document.getElementById('balChange').className = 'value ' + (netChange>=0?'pos':'neg');
+
+    if (acct.account_kind === 'prop') {
+        document.getElementById('rulesGrid').style.display = 'grid';
+        const targetAmt = Number(acct.starting_balance) * (Number(acct.profit_target_pct||0)/100);
+        const ddAmt = Number(acct.starting_balance) * (Number(acct.drawdown_pct||0)/100);
+        const dailyAmt = Number(acct.starting_balance) * (Number(acct.daily_loss_limit_pct||0)/100);
+
+        document.getElementById('rtCurrent').textContent = '$' + Math.max(netPnl,0).toFixed(0);
+        document.getElementById('rtTarget').textContent = 'of $' + targetAmt.toFixed(0);
+        document.getElementById('rtBar').style.width = Math.min(100, targetAmt ? (Math.max(netPnl,0)/targetAmt*100) : 0) + '%';
+
+        const ddUsed = Math.max(0, -Math.min(netPnl,0));
+        document.getElementById('ddTitle').textContent = 'Max Drawdown (' + (acct.drawdown_type||'—') + ')';
+        document.getElementById('ddCurrent').textContent = '$' + ddUsed.toFixed(0);
+        document.getElementById('ddTarget').textContent = 'of $' + ddAmt.toFixed(0);
+        document.getElementById('ddBar').style.width = Math.min(100, ddAmt ? (ddUsed/ddAmt*100) : 0) + '%';
+
+        // Daily loss: trades don't have a reliable close_time filter wired yet in this pass —
+        // FLAG: needs close_time-based "today" filter once sync includes timestamps.
+        document.getElementById('dlCurrent').textContent = '$0';
+        document.getElementById('dlTarget').textContent = 'of $' + dailyAmt.toFixed(0);
+        document.getElementById('dlBar').style.width = '0%';
+    } else {
+        document.getElementById('rulesGrid').style.display = 'none';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// P&L CALC
+// ═══════════════════════════════════════════════════════════
+function normalizeDirection(tradeType) {
+    if (!tradeType) return 'buy';
+    const v = String(tradeType).toLowerCase();
+    if (v.includes('short') || v.includes('sell') || v === 's') return 'sell';
+    return 'buy';
+}
+
+function calcPnl(t) {
+    const spec = CONTRACT_SPECS[t.pair];
+    if (!spec || t.entry_price == null || t.close_price == null || t.lot_size == null) return 0;
+    const dir = normalizeDirection(t.trade_type) === 'sell' ? -1 : 1;
+    let pnl = (Number(t.close_price) - Number(t.entry_price)) * Number(t.lot_size) * spec.contractSize * dir;
+    if (!spec.quoteIsUSD) pnl = pnl / Number(t.close_price);
+    return pnl;
+}
+
+// ═══════════════════════════════════════════════════════════
+// SYNC FROM JOURNAL (read-only)
+// ═══════════════════════════════════════════════════════════
+async function syncFromJournal() {
+    const btn = document.getElementById('syncBtn');
+    btn.disabled = true; btn.textContent = 'Syncing…';
+    const { data, error } = await sb.from('trades').select(
+        'id,pair,trade_type,entry_price,close_price,lot_size,status,close_time'
+    ).eq('status', 'closed');
+    btn.disabled = false; btn.textContent = 'Sync';
+    if (error) { console.error(error); document.getElementById('syncNote').textContent = 'Sync failed — see console'; return; }
+    journalTradesCache = data || [];
+    document.getElementById('syncNote').textContent = `Synced ${journalTradesCache.length} closed trades — ${new Date().toLocaleString()}`;
+    await renderActiveAccount();
+}
+
+// ═══════════════════════════════════════════════════════════
+// ADD ACCOUNT MODAL
+// ═══════════════════════════════════════════════════════════
+function openAddAccountModal() {
+    document.getElementById('addAccountScrim').classList.add('open');
+    resetAddAccountForm();
+}
+function closeAddAccountModal() { document.getElementById('addAccountScrim').classList.remove('open'); }
+
+function resetAddAccountForm() {
+    ['fName','fFirm','fAcctType','fStartBal','rTarget','rDD','rDaily','rComm'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('reviewSection').style.display = 'none';
+    document.getElementById('confirmSaveBtn').style.display = 'none';
+    document.getElementById('fetchMsg').textContent = '';
+    lastFetchedRules = null;
+    setAccountKind('prop');
+}
+
+function setAccountKind(kind) {
+    addAccountKind = kind;
+    document.getElementById('kindPropBtn').classList.toggle('sel', kind==='prop');
+    document.getElementById('kindPersonalBtn').classList.toggle('sel', kind==='personal');
+    document.getElementById('propFields').style.display = kind==='prop' ? 'block' : 'none';
+    document.getElementById('personalFields').style.display = kind==='personal' ? 'block' : 'none';
+    document.getElementById('fetchRulesBtn').textContent = kind === 'prop' ? 'Fetch Rules' : 'Fetch Commission Info';
+}
+
+function onBrokerChange() { /* placeholder for future broker-specific UI tweaks */ }
+
+async function fetchRulesFromWorker() {
+    const msgEl = document.getElementById('fetchMsg');
+    msgEl.className = 'msg'; msgEl.textContent = 'Fetching…';
+    document.getElementById('fetchRulesBtn').disabled = true;
+
+    try {
+        if (addAccountKind === 'prop') {
+            const firmName = document.getElementById('fFirm').value.trim();
+            const accountType = document.getElementById('fAcctType').value.trim();
+            if (!firmName) { msgEl.textContent = 'Enter a firm name first.'; msgEl.className='msg err'; return; }
+            const res = await fetch(GEMINI_WORKER_URL, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ firmName, accountType, mode: 'prop_rules' })
+            });
+            const json = await res.json();
+            if (json.error) { msgEl.textContent = json.error; msgEl.className='msg err'; return; }
+            lastFetchedRules = json;
+            document.getElementById('rTarget').value = json.profit_target_pct ?? '';
+            document.getElementById('rDDType').value = json.drawdown_type || 'static';
+            document.getElementById('rDD').value = json.drawdown_pct ?? '';
+            document.getElementById('rDaily').value = json.daily_loss_limit_pct ?? '';
+            document.getElementById('rComm').value = json.commission_per_lot_usd ?? '';
+            msgEl.textContent = json.source_confidence === 'low' ? 'Low confidence — please fill in manually where blank.' : 'Fetched — please verify before saving.';
+            msgEl.className = 'msg ok';
+        } else {
+            const broker = document.getElementById('fBroker').value;
+            if (broker === 'IC Markets') {
+                lastFetchedRules = IC_MARKETS_PRESET;
+                document.getElementById('rComm').value = IC_MARKETS_PRESET.commission_per_lot_usd;
+                msgEl.textContent = 'Preset loaded — verify against icmarkets.com.';
+                msgEl.className = 'msg ok';
+            } else if (broker === 'Exness') {
+                const res = await fetch(GEMINI_WORKER_URL, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ firmName: 'Exness', mode: 'broker_commission' })
+                });
+                const json = await res.json();
+                lastFetchedRules = json;
+                document.getElementById('rComm').value = json.commission_per_lot_usd ?? '';
+                msgEl.textContent = json.source_confidence === 'low' ? 'Low confidence — fill in manually.' : 'Fetched — please verify.';
+                msgEl.className = 'msg ok';
+            } else {
+                lastFetchedRules = null;
+                msgEl.textContent = 'Enter commission manually below.';
+                msgEl.className = 'msg';
+            }
+            // Personal accounts don't use target/drawdown/daily fields — hide them
+            document.getElementById('rTarget').closest('.field').style.display = 'none';
+            document.getElementById('rDDType').closest('.field').style.display = 'none';
+            document.getElementById('rDD').closest('.field').style.display = 'none';
+            document.getElementById('rDaily').closest('.field').style.display = 'none';
+        }
+        document.getElementById('reviewSection').style.display = 'block';
+        document.getElementById('confirmSaveBtn').style.display = 'block';
+    } catch (e) {
+        msgEl.textContent = 'Request failed: ' + e.message;
+        msgEl.className = 'msg err';
+    } finally {
+        document.getElementById('fetchRulesBtn').disabled = false;
+    }
+}
+
+async function confirmSaveAccount() {
+    const name = document.getElementById('fName').value.trim();
+    const startBal = parseFloat(document.getElementById('fStartBal').value);
+    if (!name || !startBal) { alert('Name and starting balance are required.'); return; }
+
+    const payload = {
+        user_id: currentUser.id,
+        name,
+        account_kind: addAccountKind,
+        starting_balance: startBal,
+        currency: 'USD',
+        status: 'active',
+        setup_source: lastFetchedRules ? (addAccountKind==='personal' && document.getElementById('fBroker').value==='IC Markets' ? 'preset' : 'ai_search') : 'manual',
+        ai_suggested_raw: lastFetchedRules || null,
+        ai_fetched_at: lastFetchedRules ? new Date().toISOString() : null,
+        user_confirmed_at: new Date().toISOString()
+    };
+
+    if (addAccountKind === 'prop') {
+        payload.firm_name = document.getElementById('fFirm').value.trim();
+        payload.account_type = document.getElementById('fAcctType').value.trim();
+        payload.profit_target_pct = parseFloat(document.getElementById('rTarget').value) || null;
+        payload.drawdown_type = document.getElementById('rDDType').value;
+        payload.drawdown_pct = parseFloat(document.getElementById('rDD').value) || null;
+        payload.daily_loss_limit_pct = parseFloat(document.getElementById('rDaily').value) || null;
+        payload.commission_per_lot = parseFloat(document.getElementById('rComm').value) || 0;
+    } else {
+        payload.broker_name = document.getElementById('fBroker').value;
+        payload.commission_per_lot = parseFloat(document.getElementById('rComm').value) || 0;
+    }
+
+    const { data, error } = await sb.from('accounts').insert(payload).select().single();
+    if (error) { alert('Save failed: ' + error.message); return; }
+
+    accounts.push(data);
+    activeAccountId = data.id;
+    closeAddAccountModal();
+    renderDrawer();
+    renderActiveAccount();
+}
+
+// ═══════════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════════
+function toggleDrawer(open) {
+    document.getElementById('drawer').classList.toggle('open', open);
+    document.getElementById('scrim').classList.toggle('open', open);
+}
+function toggleTheme() {
+    const body = document.body;
+    const isDark = body.getAttribute('data-theme') === 'dark';
+    body.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    document.getElementById('themeLabel').textContent = isDark ? 'Light mode' : 'Dark mode';
+}
+
+checkExistingSession();
+</script>
 </body>
 </html>
