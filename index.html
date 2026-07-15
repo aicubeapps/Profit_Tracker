@@ -204,6 +204,10 @@
             <div class="balance-meta">
                 <div class="item"><div class="label">Starting</div><div class="value" id="balStart">—</div></div>
                 <div class="item"><div class="label">Net Change</div><div class="value" id="balChange">—</div></div>
+                <div class="item"><div class="label">Win Rate</div><div class="value" id="balWinRate">—</div></div>
+                <div class="item"><div class="label">Best Trade</div><div class="value pos" id="balBest" style="font-size:12px;">—</div></div>
+                <div class="item"><div class="label">Worst Trade</div><div class="value neg" id="balWorst" style="font-size:12px;">—</div></div>
+                <div class="item" style="align-self:flex-end;"><button class="btn ghost" style="padding:6px 12px;font-size:11px;" onclick="exportToCsv()">⬇ Export CSV</button></div>
             </div>
         </div>
 
@@ -230,7 +234,7 @@
 
         <div class="panel">
             <div class="panel-head"><h3>Equity Curve</h3><span style="font-size:12px;color:var(--muted);">Balance over time</span></div>
-            <div class="chart-placeholder">[ equity curve — coming once trade history builds up ]</div>
+            <div style="height:200px;position:relative;"><canvas id="equityCanvas"></canvas></div>
         </div>
 
         <div class="panel">
@@ -238,6 +242,7 @@
                 <h3 id="tradesHeading">Trades</h3>
                 <span style="font-size:12px;color:var(--muted);" id="syncNote">Not synced yet</span>
             </div>
+            <div id="assetSpecBanner"></div>
             <div class="table-wrap">
                 <table>
                     <thead><tr><th>Asset</th><th>Side</th><th class="mono">Lots</th><th class="mono">P&amp;L</th></tr></thead>
@@ -301,11 +306,31 @@
             <div class="field"><label>Drawdown % <span class="ai-tag" id="tagDD">AI</span></label><input id="rDD" type="number" step="0.1"></div>
             <div class="field"><label>Daily Loss Limit % <span class="ai-tag" id="tagDaily">AI</span></label><input id="rDaily" type="number" step="0.1"></div>
             <div class="field"><label>Commission per Lot (USD) <span class="ai-tag" id="tagComm">AI</span></label><input id="rComm" type="number" step="0.01"></div>
+            <div class="field" id="resetTimeField"><label>Daily Reset (UTC hour 0-23) <span class="ai-tag" id="tagReset">AI</span></label><input id="rReset" type="number" min="0" max="23" step="1" placeholder="22 = 5pm New York EST"></div>
         </div>
 
         <div class="modal-actions">
             <button class="btn ghost" onclick="closeAddAccountModal()">Cancel</button>
             <button class="btn primary" id="confirmSaveBtn" style="display:none;" onclick="confirmSaveAccount()">Confirm &amp; Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════ ACCOUNT OPTIONS MODAL ══════════ -->
+<div class="modal-scrim" id="accountOptionsScrim">
+    <div class="modal" style="max-width:340px;">
+        <h3 id="acctOptName">Account Options</h3>
+        <div class="sub" id="acctOptSub"></div>
+
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:4px;">
+            <button class="btn ghost" style="text-align:left;border-radius:10px;" onclick="acctOptSetStatus('active')">✅ Mark as Active</button>
+            <button class="btn ghost" style="text-align:left;border-radius:10px;" onclick="acctOptSetStatus('passed')">🏆 Mark as Passed</button>
+            <button class="btn ghost" style="text-align:left;border-radius:10px;" onclick="acctOptSetStatus('breached')">🚫 Mark as Breached</button>
+            <div style="height:1px;background:var(--border);margin:4px 0;"></div>
+            <button class="btn ghost" style="text-align:left;border-radius:10px;color:var(--neg);" onclick="acctOptDelete()">🗑 Delete Account</button>
+        </div>
+        <div class="modal-actions" style="margin-top:10px;">
+            <button class="btn ghost" onclick="closeAccountOptions()">Cancel</button>
         </div>
     </div>
 </div>
@@ -316,20 +341,23 @@
 // ═══════════════════════════════════════════════════════════
 const SUPABASE_URL = "https://klgibccfziktzvlomwve.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtsZ2liY2NmemlrdHp2bG9td3ZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNDY2MTYsImV4cCI6MjA5NTgyMjYxNn0.BdmDWJWJGjytVSTTQYEAeLiYtJCFX4GaGeHpDEvbHEM";
-const GEMINI_WORKER_URL = "https://profit-tracker.aicube-apps.workers.dev/";
+const GEMINI_WORKER_URL = "https://pnl-worker.aicube-apps.workers.dev/";
 
 // IC Markets preset — published raw-spread commission as of last check.
 // FLAG: verify against ic markets' current published rates before trusting — rates change.
 const IC_MARKETS_PRESET = { commission_per_lot_usd: 7.00, spread_type: "raw_plus_commission", notes: "Preset: $3.50/side round-turn on Raw Spread accounts. Verify on icmarkets.com — last checked by app author, not live." };
 
-// Contract specs for auto P&L calc — FLAG: sanity-check first real trades against broker statement.
-const CONTRACT_SPECS = {
-    XAUUSD: { contractSize: 100, quoteIsUSD: true },
-    EURUSD: { contractSize: 100000, quoteIsUSD: true },
-    GBPUSD: { contractSize: 100000, quoteIsUSD: true },
-    GU:     { contractSize: 100000, quoteIsUSD: true },
-    USDCHF: { contractSize: 100000, quoteIsUSD: false }
-};
+// Metal contract sizes (oz per standard lot) — standard industry convention,
+// FLAG: still worth a one-time check against your specific broker.
+const METAL_OZ_PER_LOT = { XAU: 100, XAG: 5000, XPT: 50, XPD: 100 };
+const STANDARD_FX_LOT = 100000; // units of base currency per standard lot
+
+// Cache of AI-looked-up / manually-confirmed specs for symbols that don't fit
+// the standard FX/metal pattern (indices, commodities, cross pairs). Loaded
+// from the asset_specs table, keyed by symbol.
+let assetSpecsCache = {};
+let assetSpecsLookupInFlight = new Set(); // symbols currently being fetched, avoid duplicate calls
+let fxRates = {}; // quote_currency -> USD rate, refreshed on every sync via Frankfurter.app
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -382,8 +410,18 @@ async function loadAccounts() {
     if (error) { console.error(error); return; }
     accounts = data || [];
     if (!activeAccountId && accounts.length) activeAccountId = accounts[0].id;
+    await loadAssetSpecsCache();
     renderDrawer();
     renderActiveAccount();
+}
+
+async function loadAssetSpecsCache() {
+    try {
+        const { data } = await sb.from('asset_specs').select('*').eq('user_id', currentUser.id);
+        (data || []).forEach(row => { assetSpecsCache[row.symbol] = row; });
+    } catch (e) {
+        console.warn('Could not preload asset_specs (table may not exist yet):', e.message);
+    }
 }
 
 function renderDrawer() {
@@ -405,6 +443,9 @@ function renderDrawer() {
             <div class="avatar" style="background:${color};">${initials}</div>
             <div class="meta"><div class="name">${a.name}</div><div class="sub">${sub}</div></div>
             ${paperChip}${chip}
+            <button class="icon-btn" style="width:28px;height:28px;flex-shrink:0;color:var(--drawer-muted);" onclick="event.stopPropagation();openAccountOptions('${a.id}')" title="Account options">
+                <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+            </button>
         </li>`;
     }).join('');
 }
@@ -414,6 +455,56 @@ function switchAccount(id) {
     renderDrawer();
     renderActiveAccount();
     toggleDrawer(false);
+}
+
+let _acctOptId = null;
+
+function openAccountOptions(id) {
+    _acctOptId = id;
+    const a = accounts.find(x => x.id === id);
+    if (!a) return;
+    document.getElementById('acctOptName').textContent = a.name;
+    document.getElementById('acctOptSub').textContent =
+        `${a.is_paper ? 'Paper ' : ''}${a.account_kind === 'prop' ? 'Prop Firm' : 'Personal'} · ${a.status}`;
+    document.getElementById('accountOptionsScrim').classList.add('open');
+}
+
+function closeAccountOptions() {
+    _acctOptId = null;
+    document.getElementById('accountOptionsScrim').classList.remove('open');
+}
+
+async function acctOptSetStatus(status) {
+    if (!_acctOptId) return;
+    const { error } = await sb.from('accounts').update({ status }).eq('id', _acctOptId);
+    if (error) { alert('Update failed: ' + error.message); return; }
+    const a = accounts.find(x => x.id === _acctOptId);
+    if (a) a.status = status;
+    closeAccountOptions();
+    renderDrawer();
+    renderActiveAccount();
+}
+
+async function acctOptDelete() {
+    if (!_acctOptId) return;
+    const a = accounts.find(x => x.id === _acctOptId);
+    if (!a) return;
+    const confirmed = confirm(
+        `Delete "${a.name}"?\n\nThis removes the account and all its trade assignments from the PnL Tracker. ` +
+        `Your actual trades in the Journal are NOT affected.`
+    );
+    if (!confirmed) return;
+    // Delete trade assignments first (FK dependency)
+    await sb.from('trade_account_map').delete().eq('account_id', _acctOptId);
+    const { error } = await sb.from('accounts').delete().eq('id', _acctOptId);
+    if (error) { alert('Delete failed: ' + error.message); return; }
+    accounts = accounts.filter(x => x.id !== _acctOptId);
+    if (activeAccountId === _acctOptId) {
+        activeAccountId = accounts.length ? accounts[0].id : null;
+    }
+    closeAccountOptions();
+    renderDrawer();
+    renderActiveAccount();
 }
 
 function getActiveAccount() { return accounts.find(a => a.id === activeAccountId); }
@@ -431,31 +522,84 @@ async function renderActiveAccount() {
     let trades = [];
     if (tradeIds.length) {
         trades = journalTradesCache.filter(t => tradeIds.includes(t.id));
-        // fallback: if cache doesn't have them (no sync run yet this session), pull directly
         if (!trades.length) {
             const { data: fetched } = await sb.from('trades').select(
-                'id,pair,trade_type,entry_price,close_price,lot_size,status'
-            ).in('id', tradeIds);
+                'id,pair,trade_type,entry_price,close_price,lot_size,status,close_time,is_intraday'
+            ).in('id', tradeIds).eq('is_intraday', true);
             trades = fetched || [];
         }
     }
 
-    let netPnl = 0;
-    const rows = trades.map(t => {
-        const pnl = calcPnl(t);
-        netPnl += pnl;
+    // Sort by close_time for equity curve and daily grouping
+    trades.sort((a, b) => new Date(a.close_time || 0) - new Date(b.close_time || 0));
+
+    // ── Compute per-trade P&L ──
+    let netPnl = 0, anyAiSourced = false;
+    let bestPnl = null, worstPnl = null;
+    let winCount = 0, totalCount = 0;
+    const tradeResults = trades.map(t => {
+        const result = calcPnl(t, acct);
+        if (!result.noLotSize && !result.pending) {
+            netPnl += result.pnl;
+            totalCount++;
+            if (result.pnl > 0) winCount++;
+            if (bestPnl === null || result.pnl > bestPnl.pnl) bestPnl = { pnl: result.pnl, pair: t.pair, date: t.close_time };
+            if (worstPnl === null || result.pnl < worstPnl.pnl) worstPnl = { pnl: result.pnl, pair: t.pair, date: t.close_time };
+        }
+        if (result.aiSourced) anyAiSourced = true;
+        return { t, result };
+    });
+
+    // ── Daily Loss calc using broker reset time ──
+    const resetHour = Number(acct.daily_reset_utc_hour ?? 22);
+    const nowUtc = new Date();
+    // "Today's trading day" starts at the last reset boundary before now
+    const todayResetMs = (() => {
+        const d = new Date(Date.UTC(nowUtc.getUTCFullYear(), nowUtc.getUTCMonth(), nowUtc.getUTCDate(), resetHour, 0, 0));
+        return d > nowUtc ? d - 86400000 : d; // if reset is in the future today, use yesterday's reset
+    })();
+    const todayLoss = tradeResults.reduce((sum, { t, result }) => {
+        if (!t.close_time || result.noLotSize || result.pending) return sum;
+        const closeMs = new Date(t.close_time).getTime();
+        if (closeMs >= todayResetMs && result.pnl < 0) return sum + Math.abs(result.pnl);
+        return sum;
+    }, 0);
+
+    // ── Trade table rows ──
+    const rows = [...tradeResults].reverse().map(({ t, result }) => {
         const side = normalizeDirection(t.trade_type);
+        let pnlCell, badge = '';
+        if (result.noLotSize) {
+            pnlCell = '<span style="color:var(--muted);font-size:11px;">⚠ lot size not logged</span>';
+        } else {
+            const pnl = result.pnl;
+            if (result.aiSourced) anyAiSourced = true;
+            badge = result.aiSourced
+                ? `<span title="${result.pending ? 'Looking up…' : 'AI contract spec — validate manually'}" style="margin-left:4px;cursor:help;">${result.pending ? '⏳' : '☁️'}</span>`
+                : result.pending
+                    ? `<span title="${result.pendingMsg || 'Run Sync'}" style="margin-left:4px;cursor:help;">⏳</span>`
+                    : '';
+            pnlCell = `<span class="${pnl>=0?'pnl-pos':'pnl-neg'}">${pnl>=0?'+':''}$${pnl.toFixed(2)}</span>${badge}`;
+        }
+        const dateStr = t.close_time ? new Date(t.close_time).toLocaleDateString(undefined, { month:'short', day:'numeric' }) : '—';
         return `<tr>
             <td>${t.pair || '—'}</td>
             <td><span class="side-pill ${side==='sell'?'sell':'buy'}">${side==='sell'?'Sell':'Buy'}</span></td>
             <td class="mono">${t.lot_size ?? '—'}</td>
-            <td class="mono ${pnl>=0?'pnl-pos':'pnl-neg'}">${pnl>=0?'+':''}$${pnl.toFixed(2)}</td>
+            <td class="mono">${pnlCell}</td>
         </tr>`;
     }).join('');
 
-    document.getElementById('tradesBody').innerHTML = rows || '<tr><td colspan="4" class="empty-note">No trades assigned to this account yet. Run Sync, then assign trades from the journal.</td></tr>';
-    document.getElementById('tradesHeading').textContent = `Trades — ${acct.name}`;
+    const banner = anyAiSourced
+        ? `<div style="background:var(--pastel-lemon);color:#5c4a00;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:10px;">☁️ Some values use AI-looked-up contract specs — validate manually against your broker.</div>`
+        : '';
 
+    document.getElementById('tradesBody').innerHTML = rows || '<tr><td colspan="4" class="empty-note">No intraday trades assigned yet. Run Sync, then assign trades via the Journal close modal.</td></tr>';
+    document.getElementById('tradesHeading').textContent = `Intraday Trades — ${acct.name}`;
+    const bannerEl = document.getElementById('assetSpecBanner');
+    if (bannerEl) bannerEl.innerHTML = banner;
+
+    // ── Balance card ──
     const balance = Number(acct.starting_balance) + netPnl;
     const netChange = balance - Number(acct.starting_balance);
     document.getElementById('balFigure').textContent = '$' + balance.toFixed(2);
@@ -465,31 +609,47 @@ async function renderActiveAccount() {
     document.getElementById('balChange').textContent = (netChange>=0?'+':'') + '$' + netChange.toFixed(2) + ' (' + (netChange>=0?'+':'') + pctChange + '%)';
     document.getElementById('balChange').className = 'value ' + (netChange>=0?'pos':'neg');
 
+    // ── Win rate + best/worst in balance meta ──
+    const winRate = totalCount > 0 ? Math.round(winCount / totalCount * 100) : null;
+    const elWR = document.getElementById('balWinRate');
+    if (elWR) { elWR.textContent = winRate !== null ? winRate + '% win rate' : '—'; }
+    const elBest = document.getElementById('balBest');
+    if (elBest) elBest.textContent = bestPnl ? `Best: +$${bestPnl.pnl.toFixed(2)} (${bestPnl.pair})` : '—';
+    const elWorst = document.getElementById('balWorst');
+    if (elWorst) elWorst.textContent = worstPnl && worstPnl.pnl < 0 ? `Worst: -$${Math.abs(worstPnl.pnl).toFixed(2)} (${worstPnl.pair})` : '—';
+
+    // ── Prop rules block ──
     if (acct.account_kind === 'prop') {
         document.getElementById('rulesGrid').style.display = 'grid';
         const targetAmt = Number(acct.starting_balance) * (Number(acct.profit_target_pct||0)/100);
         const ddAmt = Number(acct.starting_balance) * (Number(acct.drawdown_pct||0)/100);
-        const dailyAmt = Number(acct.starting_balance) * (Number(acct.daily_loss_limit_pct||0)/100);
+        const dailyLimitAmt = Number(acct.starting_balance) * (Number(acct.daily_loss_limit_pct||0)/100);
 
         document.getElementById('rtCurrent').textContent = '$' + Math.max(netPnl,0).toFixed(0);
         document.getElementById('rtTarget').textContent = 'of $' + targetAmt.toFixed(0);
         document.getElementById('rtBar').style.width = Math.min(100, targetAmt ? (Math.max(netPnl,0)/targetAmt*100) : 0) + '%';
 
-        const ddUsed = Math.max(0, -Math.min(netPnl,0));
+        const ddUsed = Math.max(0, -netPnl);
         document.getElementById('ddTitle').textContent = 'Max Drawdown (' + (acct.drawdown_type||'—') + ')';
         document.getElementById('ddCurrent').textContent = '$' + ddUsed.toFixed(0);
         document.getElementById('ddTarget').textContent = 'of $' + ddAmt.toFixed(0);
         document.getElementById('ddBar').style.width = Math.min(100, ddAmt ? (ddUsed/ddAmt*100) : 0) + '%';
 
-        // Daily loss: trades don't have a reliable close_time filter wired yet in this pass —
-        // FLAG: needs close_time-based "today" filter once sync includes timestamps.
-        document.getElementById('dlCurrent').textContent = '$0';
-        document.getElementById('dlTarget').textContent = 'of $' + dailyAmt.toFixed(0);
-        document.getElementById('dlBar').style.width = '0%';
+        // Daily loss — wired to broker reset time
+        document.getElementById('dlCurrent').textContent = '$' + todayLoss.toFixed(0);
+        document.getElementById('dlTarget').textContent = 'of $' + dailyLimitAmt.toFixed(0);
+        const dlPct = dailyLimitAmt > 0 ? Math.min(100, todayLoss/dailyLimitAmt*100) : 0;
+        document.getElementById('dlBar').style.width = dlPct + '%';
+        document.getElementById('dlBar').className = 'bar-fill ' + (dlPct >= 80 ? 'c-pink' : 'c-mint');
+        document.getElementById('dlBar').parentElement.title = `Resets at ${resetHour}:00 UTC daily`;
     } else {
         document.getElementById('rulesGrid').style.display = 'none';
     }
+
+    // ── Equity curve ──
+    renderEquityCurve(tradeResults, Number(acct.starting_balance));
 }
+
 
 // ═══════════════════════════════════════════════════════════
 // P&L CALC
@@ -501,29 +661,272 @@ function normalizeDirection(tradeType) {
     return 'buy';
 }
 
-function calcPnl(t) {
-    const spec = CONTRACT_SPECS[t.pair];
-    if (!spec || t.entry_price == null || t.close_price == null || t.lot_size == null) return 0;
+// Classifies a symbol into a calc method without a fixed pair list:
+// - ends in USD (currency or metal quoted directly in USD) → direct calc
+// - starts with USD (e.g. USDCHF, USDJPY) → calc then convert via /close_price
+// - anything else (indices, commodities, cross pairs) → needs a cloud-sourced
+//   contract spec, cached in asset_specs and flagged for manual validation.
+// Known currency codes (3-letter ISO) for cross-pair detection
+const ISO_CCY = new Set(['EUR','GBP','AUD','NZD','CAD','CHF','JPY','SGD','HKD','NOK','SEK','DKK','MXN','ZAR','TRY','PLN','CZK','HUF','THB','INR','CNH','CNY','KRW','TWD','BRL','ILS']);
+
+function classifySymbol(pair) {
+    if (!pair) return { kind: 'unknown' };
+    const p = pair.toUpperCase().replace(/[^A-Z]/g, '');
+
+    // Metal/commodity ending in USD (XAUUSD, XAGUSD etc.) — variable length prefix
+    const metalBase = Object.keys(METAL_OZ_PER_LOT).find(m => p.startsWith(m) && p.endsWith('USD'));
+    if (metalBase) {
+        return { kind: 'direct_usd', contractSize: METAL_OZ_PER_LOT[metalBase] };
+    }
+
+    // Standard 6-char pairs
+    if (p.length === 6) {
+        const base = p.slice(0, 3);
+        const quote = p.slice(3, 6);
+
+        if (quote === 'USD') {
+            const contractSize = METAL_OZ_PER_LOT[base] || STANDARD_FX_LOT;
+            return { kind: 'direct_usd', contractSize };
+        }
+        if (base === 'USD') {
+            return { kind: 'usd_base', contractSize: STANDARD_FX_LOT };
+        }
+        // Cross pair — both recognized ISO currencies, neither is USD
+        if (ISO_CCY.has(base) && ISO_CCY.has(quote)) {
+            return { kind: 'cross_pair', contractSize: STANDARD_FX_LOT, quoteCcy: quote };
+        }
+    }
+
+    return { kind: 'needs_lookup' };
+}
+
+
+// Returns { pnl, aiSourced } — aiSourced flags whether this figure relied on a
+// cloud-looked-up spec, so the UI can show the "validate manually" indicator.
+function calcPnl(t, acct) {
+    // lot_size missing — silent $0 would be misleading; flag it explicitly
+    if (t.lot_size == null) return { pnl: 0, aiSourced: false, noLotSize: true };
+    if (t.entry_price == null || t.close_price == null) return { pnl: 0, aiSourced: false };
     const dir = normalizeDirection(t.trade_type) === 'sell' ? -1 : 1;
-    let pnl = (Number(t.close_price) - Number(t.entry_price)) * Number(t.lot_size) * spec.contractSize * dir;
-    if (!spec.quoteIsUSD) pnl = pnl / Number(t.close_price);
-    return pnl;
+    const cls = classifySymbol(t.pair);
+    const commissionPerLot = acct ? (Number(acct.commission_per_lot) || 0) : 0;
+    const commissionDeduct = commissionPerLot * Number(t.lot_size);
+
+    function withComm(rawPnl, extra) {
+        return { pnl: rawPnl - commissionDeduct, aiSourced: false, ...extra };
+    }
+
+    if (cls.kind === 'direct_usd') {
+        const pnl = (Number(t.close_price) - Number(t.entry_price)) * Number(t.lot_size) * cls.contractSize * dir;
+        return withComm(pnl);
+    }
+    if (cls.kind === 'usd_base') {
+        let pnl = (Number(t.close_price) - Number(t.entry_price)) * Number(t.lot_size) * cls.contractSize * dir;
+        pnl = pnl / Number(t.close_price);
+        return withComm(pnl);
+    }
+    if (cls.kind === 'cross_pair') {
+        const rate = fxRates[cls.quoteCcy];
+        if (!rate) return { pnl: 0, aiSourced: false, pending: true, pendingMsg: `Awaiting ${cls.quoteCcy}/USD rate — run Sync` };
+        const pnlInQuote = (Number(t.close_price) - Number(t.entry_price)) * Number(t.lot_size) * cls.contractSize * dir;
+        return withComm(pnlInQuote * rate);
+    }
+
+    // needs_lookup: use cached asset_specs entry if we have one
+    const spec = assetSpecsCache[t.pair];
+    if (!spec) {
+        ensureAssetSpecLookup(t.pair);
+        return { pnl: 0, aiSourced: true, pending: true };
+    }
+    if (spec.point_value_usd != null) {
+        const pnl = (Number(t.close_price) - Number(t.entry_price)) * Number(t.lot_size) * Number(spec.point_value_usd) * dir;
+        return { pnl: pnl - commissionDeduct, aiSourced: true };
+    }
+    if (spec.contract_size != null) {
+        let pnl = (Number(t.close_price) - Number(t.entry_price)) * Number(t.lot_size) * Number(spec.contract_size) * dir;
+        if (spec.quote_currency && spec.quote_currency !== 'USD') pnl = pnl / Number(t.close_price);
+        return { pnl: pnl - commissionDeduct, aiSourced: true };
+    }
+    return { pnl: 0, aiSourced: true };
+}
+
+// Fetches + caches a contract spec for an unrecognized symbol via the Gemini Worker,
+// stores it in asset_specs for reuse, then re-renders so the figure updates.
+async function ensureAssetSpecLookup(symbol) {
+    if (assetSpecsCache[symbol] || assetSpecsLookupInFlight.has(symbol)) return;
+    assetSpecsLookupInFlight.add(symbol);
+    try {
+        const { data: existing } = await sb.from('asset_specs').select('*')
+            .eq('user_id', currentUser.id).eq('symbol', symbol).maybeSingle();
+        if (existing) {
+            assetSpecsCache[symbol] = existing;
+            assetSpecsLookupInFlight.delete(symbol);
+            renderActiveAccount();
+            return;
+        }
+        const res = await fetch(GEMINI_WORKER_URL, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'asset_spec', symbol })
+        });
+        const json = await res.json();
+        const row = {
+            user_id: currentUser.id, symbol,
+            contract_size: json.contract_size ?? null,
+            quote_currency: json.quote_currency ?? null,
+            point_value_usd: json.point_value_usd ?? null,
+            source: 'ai_lookup',
+            source_confidence: json.source_confidence || 'low',
+            notes: json.notes || null,
+            fetched_at: new Date().toISOString()
+        };
+        const { data: saved } = await sb.from('asset_specs').upsert(row, { onConflict: 'user_id,symbol' }).select().single();
+        assetSpecsCache[symbol] = saved || row;
+    } catch (e) {
+        console.warn('Asset spec lookup failed for', symbol, e.message);
+        assetSpecsCache[symbol] = { symbol, contract_size: null, source: 'ai_lookup', source_confidence: 'low', notes: 'Lookup failed' };
+    } finally {
+        assetSpecsLookupInFlight.delete(symbol);
+        renderActiveAccount();
+    }
 }
 
 // ═══════════════════════════════════════════════════════════
 // SYNC FROM JOURNAL (read-only)
 // ═══════════════════════════════════════════════════════════
+// ── EQUITY CURVE ──
+let _equityChart = null;
+function renderEquityCurve(tradeResults, startBalance) {
+    const canvas = document.getElementById('equityCanvas');
+    if (!canvas) return;
+    // Build cumulative P&L series sorted by close_time
+    const points = [{ x: 'Start', y: startBalance }];
+    let running = startBalance;
+    tradeResults.forEach(({ t, result }) => {
+        if (result.noLotSize || result.pending || !t.close_time) return;
+        running += result.pnl;
+        const label = new Date(t.close_time).toLocaleDateString(undefined, { month:'short', day:'numeric' });
+        points.push({ x: label, y: parseFloat(running.toFixed(2)) });
+    });
+    const labels = points.map(p => p.x);
+    const data = points.map(p => p.y);
+    const color = data[data.length - 1] >= startBalance ? '#7FE0A8' : '#FF9AA8';
+
+    if (_equityChart) { _equityChart.destroy(); _equityChart = null; }
+    if (typeof Chart === 'undefined') return; // Chart.js not loaded yet
+    _equityChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                data,
+                borderColor: color,
+                backgroundColor: color + '22',
+                borderWidth: 2,
+                pointRadius: data.length > 30 ? 0 : 3,
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { maxTicksLimit: 8, color: 'var(--muted)', font: { size: 10 } }, grid: { display: false } },
+                y: { ticks: { color: 'var(--muted)', font: { size: 10 }, callback: v => '$' + v.toLocaleString() }, grid: { color: 'var(--border)' } }
+            }
+        }
+    });
+}
+
+// ── CSV EXPORT ──
+function exportToCsv() {
+    const acct = getActiveAccount();
+    if (!acct) return;
+    const rows = [['Date', 'Pair', 'Side', 'Lots', 'Entry', 'Close', 'P&L (USD)', 'Commission', 'Net P&L (USD)']];
+    const commPerLot = Number(acct.commission_per_lot) || 0;
+    // Re-derive from journalTradesCache filtered to this account's map
+    const mapIds = Object.entries(journalTradesCache.length ? {} : {});
+    const trades = journalTradesCache;
+    trades.forEach(t => {
+        const result = calcPnl(t, acct);
+        if (result.noLotSize || result.pending) return;
+        const comm = commPerLot * Number(t.lot_size);
+        const gross = result.pnl + comm;
+        rows.push([
+            t.close_time ? new Date(t.close_time).toLocaleDateString() : '',
+            t.pair || '',
+            normalizeDirection(t.trade_type),
+            t.lot_size ?? '',
+            t.entry_price ?? '',
+            t.close_price ?? '',
+            gross.toFixed(2),
+            comm.toFixed(2),
+            result.pnl.toFixed(2)
+        ]);
+    });
+    const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${acct.name.replace(/[^a-zA-Z0-9]/g,'_')}_trades.csv`;
+    a.click(); URL.revokeObjectURL(url);
+}
+
 async function syncFromJournal() {
     const btn = document.getElementById('syncBtn');
     btn.disabled = true; btn.textContent = 'Syncing…';
-    const { data, error } = await sb.from('trades').select(
-        'id,pair,trade_type,entry_price,close_price,lot_size,status,close_time'
-    ).eq('status', 'closed');
-    btn.disabled = false; btn.textContent = 'Sync';
-    if (error) { console.error(error); document.getElementById('syncNote').textContent = 'Sync failed — see console'; return; }
-    journalTradesCache = data || [];
-    document.getElementById('syncNote').textContent = `Synced ${journalTradesCache.length} closed trades — ${new Date().toLocaleString()}`;
+    try {
+        const { data, error } = await sb.from('trades').select(
+            'id,pair,trade_type,entry_price,close_price,lot_size,status,close_time'
+        ).eq('status', 'closed').eq('is_intraday', true);
+        if (error) throw error;
+        journalTradesCache = data || [];
+
+        // Collect all quote currencies needed for cross pairs in this dataset
+        const quoteCcysNeeded = new Set();
+        journalTradesCache.forEach(t => {
+            const cls = classifySymbol(t.pair);
+            if (cls.kind === 'cross_pair') quoteCcysNeeded.add(cls.quoteCcy);
+        });
+
+        // Fetch all needed rates in one Frankfurter call (ECB rates, daily)
+        if (quoteCcysNeeded.size > 0) {
+            await fetchFxRates([...quoteCcysNeeded]);
+        }
+
+        document.getElementById('syncNote').textContent = `Synced ${journalTradesCache.length} intraday trades — ${new Date().toLocaleString()}`;
+    } catch (e) {
+        console.error(e);
+        document.getElementById('syncNote').textContent = 'Sync failed — see console';
+    } finally {
+        btn.disabled = false; btn.textContent = 'Sync';
+    }
     await renderActiveAccount();
+}
+
+// Fetches quote-to-USD rates from Frankfurter.app (ECB rates, free, no API key).
+// Accepts an array of 3-letter currency codes (e.g. ['JPY','CHF','GBP']).
+// Stores results in the session fxRates cache as { JPY: 0.0067, ... }
+async function fetchFxRates(ccys) {
+    try {
+        // Frankfurter supports multi-currency from a single base in one call
+        // e.g. /latest?from=USD&to=JPY,CHF,GBP  → inverse gives us ccy/USD
+        const symbols = ccys.join(',');
+        const res = await fetch(`https://api.frankfurter.app/latest?from=USD&to=${symbols}`);
+        if (!res.ok) throw new Error(`Frankfurter HTTP ${res.status}`);
+        const json = await res.json();
+        // json.rates = { JPY: 149.5, CHF: 0.895, ... } (USD per 1 of each ccy, inverted)
+        // We need ccy/USD, so: JPY/USD = 1/149.5
+        Object.entries(json.rates || {}).forEach(([ccy, usdPerCcy]) => {
+            fxRates[ccy] = 1 / usdPerCcy;
+        });
+        // Also ensure USD itself is set (trivially 1)
+        fxRates['USD'] = 1;
+    } catch (e) {
+        // Non-fatal — cross-pair trades will show ⏳ until next sync
+        console.warn('FX rate fetch failed:', e.message);
+    }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -536,7 +939,7 @@ function openAddAccountModal() {
 function closeAddAccountModal() { document.getElementById('addAccountScrim').classList.remove('open'); }
 
 function resetAddAccountForm() {
-    ['fName','fFirm','fAcctType','fStartBal','rTarget','rDD','rDaily','rComm'].forEach(id => document.getElementById(id).value = '');
+    ['fName','fFirm','fAcctType','fStartBal','rTarget','rDD','rDaily','rComm','rReset'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('reviewSection').style.display = 'none';
     document.getElementById('confirmSaveBtn').style.display = 'none';
     document.getElementById('fetchMsg').textContent = '';
@@ -584,6 +987,7 @@ async function fetchRulesFromWorker() {
             document.getElementById('rDD').value = json.drawdown_pct ?? '';
             document.getElementById('rDaily').value = json.daily_loss_limit_pct ?? '';
             document.getElementById('rComm').value = json.commission_per_lot_usd ?? '';
+            document.getElementById('rReset').value = json.daily_reset_utc_hour ?? 22;
             msgEl.textContent = json.source_confidence === 'low' ? 'Low confidence — please fill in manually where blank.' : 'Fetched — please verify before saving.';
             msgEl.className = 'msg ok';
         } else {
@@ -613,6 +1017,7 @@ async function fetchRulesFromWorker() {
             document.getElementById('rDDType').closest('.field').style.display = 'none';
             document.getElementById('rDD').closest('.field').style.display = 'none';
             document.getElementById('rDaily').closest('.field').style.display = 'none';
+            document.getElementById('resetTimeField').style.display = 'none';
         }
         document.getElementById('reviewSection').style.display = 'block';
         document.getElementById('confirmSaveBtn').style.display = 'block';
@@ -651,6 +1056,7 @@ async function confirmSaveAccount() {
         payload.drawdown_pct = parseFloat(document.getElementById('rDD').value) || null;
         payload.daily_loss_limit_pct = parseFloat(document.getElementById('rDaily').value) || null;
         payload.commission_per_lot = parseFloat(document.getElementById('rComm').value) || 0;
+        payload.daily_reset_utc_hour = parseInt(document.getElementById('rReset').value) ?? 22;
     } else {
         payload.broker_name = document.getElementById('fBroker').value;
         payload.commission_per_lot = parseFloat(document.getElementById('rComm').value) || 0;
@@ -692,5 +1098,6 @@ function toggleTheme() {
 
 checkExistingSession();
 </script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </body>
 </html>
