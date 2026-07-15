@@ -490,6 +490,7 @@ let currentUser = null;
 let accounts = [];
 let activeAccountId = null;
 let journalTradesCache = [];   // raw trades fetched from journal on last sync
+let activeTradesCache = {};    // trade_id -> trade object, always current for the active account
 let addAccountKind = 'prop';
 let addAccountPaper = false;
 let lastFetchedRules = null;
@@ -602,8 +603,8 @@ function closeAccountOptions() {
 // ── TRADE DETAIL POPUP ──
 function openTradePopup(tradeId) {
     const acct = getActiveAccount();
-    const t = journalTradesCache.find(x => x.id === tradeId);
-    if (!t) return;
+    const t = activeTradesCache[tradeId] || journalTradesCache.find(x => x.id === tradeId);
+    if (!t) { console.warn('Trade not found in cache:', tradeId); return; }
 
     const side = normalizeDirection(t.trade_type);
     const result = calcPnl(t, acct);
@@ -694,6 +695,10 @@ async function renderActiveAccount() {
             trades = fetched || [];
         }
     }
+
+    // Always keep an up-to-date lookup for the popup — works with or without a prior Sync
+    activeTradesCache = {};
+    trades.forEach(t => { activeTradesCache[t.id] = t; });
 
     // Sort by close_time for equity curve and daily grouping
     trades.sort((a, b) => new Date(a.close_time || 0) - new Date(b.close_time || 0));
@@ -1029,12 +1034,15 @@ function calCellHtml(dayMap, dateObj, inMonth) {
     if (!inMonth) return '<div class="cal-cell cal-empty"></div>';
     const key = calDateKey(dateObj);
     const day = dayMap[key];
-    if (!day) return `<div class="cal-cell"><div class="cal-date">${dateObj.getDate()}</div></div>`;
+    // Diagonal SVG line dividing cell top-left (pips) from bottom-right ($)
+    const diagonal = `<svg style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;" preserveAspectRatio="none" viewBox="0 0 100 100"><line x1="0" y1="100" x2="100" y2="0" stroke="currentColor" stroke-width="0.8" opacity="0.2"/></svg>`;
+    if (!day) return `<div class="cal-cell">${diagonal}<div class="cal-date">${dateObj.getDate()}</div></div>`;
     const posClass = day.totalPnl >= 0 ? 'cal-pos' : 'cal-neg';
     const amtText = (day.totalPnl >= 0 ? '+' : '') + '$' + Math.abs(day.totalPnl).toFixed(0);
     const pipText = (day.totalPips >= 0 ? '+' : '') + day.totalPips.toFixed(1) + 'p';
     const wr = day.tradeCount > 0 ? Math.round(day.wins / day.tradeCount * 100) + '% WR' : '';
     return `<div class="cal-cell has-trades ${posClass}">
+        ${diagonal}
         <div class="cal-date">${dateObj.getDate()}</div>
         <div class="cal-pip" style="color:${day.totalPips>=0?'var(--pos)':'var(--neg)'}">${pipText}</div>
         <div class="cal-amt">${amtText}</div>
@@ -1096,25 +1104,28 @@ function renderCalendar() {
         const ref = calRefDate;
         const firstDay = new Date(ref.getFullYear(), ref.getMonth(), 1);
         const lastDay = new Date(ref.getFullYear(), ref.getMonth()+1, 0);
-        // Start from Sunday of the first week
-        const startSun = new Date(firstDay);
-        startSun.setDate(startSun.getDate() - startSun.getDay());
+        // Start from Monday of the first week
+        const startMon = new Date(firstDay);
+        const dow = startMon.getDay() || 7; // 1=Mon..7=Sun
+        startMon.setDate(startMon.getDate() - dow + 1);
 
-        const dowNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat','Weekly'];
-        const dowRow = `<div class="cal-dow-row" style="grid-template-columns:repeat(7,1fr) 56px">${dowNames.map(n=>`<span>${n}</span>`).join('')}</div>`;
+        const dowNames = ['Mon','Tue','Wed','Thu','Fri','Weekly'];
+        const dowRow = `<div class="cal-dow-row" style="grid-template-columns:repeat(5,1fr) 60px">${dowNames.map(n=>`<span>${n}</span>`).join('')}</div>`;
 
         let rows = '', monthPnl = 0, tradeDays = 0;
-        let cursor = new Date(startSun);
-        while (cursor <= lastDay || cursor.getDay() !== 0) {
-            const weekDays = Array.from({length:7}, (_, i) => { const d = new Date(cursor); d.setDate(d.getDate()+i); return d; });
-            const weekFxDays = weekDays.slice(1,6); // Mon-Fri
-            rows += `<div class="cal-grid" style="grid-template-columns:repeat(7,1fr) 56px;margin-bottom:3px;">`;
+        let cursor = new Date(startMon);
+        while (cursor <= lastDay || cursor.getDay() !== 1) {
+            // Mon-Fri only (5 days)
+            const weekDays = Array.from({length:5}, (_, i) => {
+                const d = new Date(cursor); d.setDate(d.getDate()+i); return d;
+            });
+            rows += `<div class="cal-grid" style="grid-template-columns:repeat(5,1fr) 60px;margin-bottom:3px;">`;
             weekDays.forEach(d => {
                 const inMonth = d.getMonth() === ref.getMonth();
                 rows += calCellHtml(dayMap, d, inMonth);
                 if (inMonth && dayMap[calDateKey(d)]) { monthPnl += dayMap[calDateKey(d)].totalPnl; tradeDays++; }
             });
-            rows += weekColHtml(dayMap, weekFxDays);
+            rows += weekColHtml(dayMap, weekDays);
             rows += '</div>';
             cursor.setDate(cursor.getDate() + 7);
         }
