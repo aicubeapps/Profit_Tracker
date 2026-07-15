@@ -259,6 +259,11 @@
         <div class="sub">Step 1 of 2 — basic setup</div>
 
         <div class="kind-toggle">
+            <button id="paperLiveBtn" class="sel" onclick="setAccountPaper(false)">Live</button>
+            <button id="paperPaperBtn" onclick="setAccountPaper(true)">Paper</button>
+        </div>
+
+        <div class="kind-toggle">
             <button id="kindPropBtn" class="sel" onclick="setAccountKind('prop')">Prop Firm</button>
             <button id="kindPersonalBtn" onclick="setAccountKind('personal')">Personal</button>
         </div>
@@ -333,6 +338,7 @@ let accounts = [];
 let activeAccountId = null;
 let journalTradesCache = [];   // raw trades fetched from journal on last sync
 let addAccountKind = 'prop';
+let addAccountPaper = false;
 let lastFetchedRules = null;
 
 // ═══════════════════════════════════════════════════════════
@@ -393,11 +399,12 @@ function renderDrawer() {
         const chip = a.status === 'breached' ? '<span class="chip breached">Breached</span>'
                    : a.status === 'passed' ? '<span class="chip passed">Passed</span>'
                    : '<span class="chip active">Active</span>';
+        const paperChip = a.is_paper ? '<span class="chip" style="background:var(--pastel-lav);color:#4A3B7A;">Paper</span>' : '';
         const sub = a.account_kind === 'prop' ? `Prop Firm${a.account_type ? ' — '+a.account_type : ''}` : (a.broker_name || 'Personal');
         return `<li class="drawer-item ${a.id===activeAccountId?'active':''}" onclick="switchAccount('${a.id}')">
             <div class="avatar" style="background:${color};">${initials}</div>
             <div class="meta"><div class="name">${a.name}</div><div class="sub">${sub}</div></div>
-            ${chip}
+            ${paperChip}${chip}
         </li>`;
     }).join('');
 }
@@ -535,6 +542,13 @@ function resetAddAccountForm() {
     document.getElementById('fetchMsg').textContent = '';
     lastFetchedRules = null;
     setAccountKind('prop');
+    setAccountPaper(false);
+}
+
+function setAccountPaper(isPaper) {
+    addAccountPaper = isPaper;
+    document.getElementById('paperLiveBtn').classList.toggle('sel', !isPaper);
+    document.getElementById('paperPaperBtn').classList.toggle('sel', isPaper);
 }
 
 function setAccountKind(kind) {
@@ -619,6 +633,7 @@ async function confirmSaveAccount() {
         user_id: currentUser.id,
         name,
         account_kind: addAccountKind,
+        is_paper: addAccountPaper,
         starting_balance: startBal,
         currency: 'USD',
         status: 'active',
