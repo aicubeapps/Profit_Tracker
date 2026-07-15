@@ -30,6 +30,12 @@
         --drawer-active-bg:#322B4D; --topbar-bg:#1C1A26; --accent:#C9B6F5; --accent-ink:#17151F;
         --pos:#7FE0A8; --pos-bg:#1E3A2B; --neg:#FF9AA8; --neg-bg:#3D2530;
     }
+    body[data-theme="black"]{
+        --bg:#000000; --surface:#0D0D0D; --surface-alt:#1A1A1A; --ink:#FFFFFF; --muted:#888888;
+        --border:#2A2A2A; --drawer-bg:#000000; --drawer-ink:#FFFFFF; --drawer-muted:#666666;
+        --drawer-active-bg:#1A1A1A; --topbar-bg:#000000; --accent:#C9B6F5; --accent-ink:#000000;
+        --pos:#00E676; --pos-bg:#00251A; --neg:#FF5252; --neg-bg:#2D0000;
+    }
     * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
     html,body { height:100%; }
     body { background:var(--bg); color:var(--ink); font-family:var(--font-sans); transition:background .2s,color .2s; }
@@ -72,6 +78,7 @@
     .switch { width:40px; height:22px; border-radius:20px; background:var(--surface-alt); position:relative; cursor:pointer; border:1px solid var(--border); }
     .switch .knob { width:16px; height:16px; border-radius:50%; background:var(--accent); position:absolute; top:2px; left:2px; transition:left .18s; }
     body[data-theme="dark"] .switch .knob { left:20px; }
+    body[data-theme="black"] .switch .knob { left:20px; }
 
     main { max-width:900px; margin:0 auto; padding:22px 18px 80px; }
     .balance-card { background:var(--surface); border-radius:var(--radius-l); box-shadow:var(--elev-2); padding:24px; margin-bottom:18px;
@@ -181,7 +188,7 @@
         <div class="drawer-foot">
             <span class="signout" onclick="doLogout()">Sign out</span>
             <div style="display:flex;align-items:center;gap:8px;">
-                <span id="themeLabel" style="font-size:12px;color:var(--drawer-muted);">Light mode</span>
+                <span id="themeLabel" style="font-size:12px;color:var(--drawer-muted);">Light</span>
                 <div class="switch" id="themeSwitch" onclick="toggleTheme()"><div class="knob"></div></div>
             </div>
         </div>
@@ -205,6 +212,7 @@
                 <div class="item"><div class="label">Starting</div><div class="value" id="balStart">—</div></div>
                 <div class="item"><div class="label">Net Change</div><div class="value" id="balChange">—</div></div>
                 <div class="item"><div class="label">Win Rate</div><div class="value" id="balWinRate">—</div></div>
+                <div class="item"><div class="label">Commission Paid</div><div class="value neg" id="balCommTotal">—</div></div>
                 <div class="item"><div class="label">Best Trade</div><div class="value pos" id="balBest" style="font-size:12px;">—</div></div>
                 <div class="item"><div class="label">Worst Trade</div><div class="value neg" id="balWorst" style="font-size:12px;">—</div></div>
                 <div class="item" style="align-self:flex-end;"><button class="btn ghost" style="padding:6px 12px;font-size:11px;" onclick="exportToCsv()">⬇ Export CSV</button></div>
@@ -237,6 +245,25 @@
             <div style="height:200px;position:relative;"><canvas id="equityCanvas"></canvas></div>
         </div>
 
+        <!-- PnL Calendar -->
+        <div class="panel" id="calPanel">
+            <div class="panel-head" style="flex-wrap:wrap;gap:10px;">
+                <h3>P&amp;L Calendar</h3>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <button class="icon-btn" style="width:28px;height:28px;" onclick="calNav(-1)">‹</button>
+                    <span id="calLabel" style="font-family:var(--font-mono);font-size:13px;font-weight:700;min-width:120px;text-align:center;">—</span>
+                    <button class="icon-btn" style="width:28px;height:28px;" onclick="calNav(1)">›</button>
+                </div>
+                <div style="display:flex;gap:4px;">
+                    <button class="btn ghost" data-cv="week" onclick="calSetView('week')" style="padding:5px 10px;font-size:11px;border-radius:20px;">Week</button>
+                    <button class="btn ghost" data-cv="month" onclick="calSetView('month')" style="padding:5px 10px;font-size:11px;border-radius:20px;">Month</button>
+                    <button class="btn ghost" data-cv="year" onclick="calSetView('year')" style="padding:5px 10px;font-size:11px;border-radius:20px;">Year</button>
+                </div>
+                <span id="calStats" style="font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--pos);">—</span>
+            </div>
+            <div id="calGrid"></div>
+        </div>
+
         <div class="panel">
             <div class="panel-head">
                 <h3 id="tradesHeading">Trades</h3>
@@ -245,7 +272,7 @@
             <div id="assetSpecBanner"></div>
             <div class="table-wrap">
                 <table>
-                    <thead><tr><th>Asset</th><th>Side</th><th class="mono">Lots</th><th class="mono">P&amp;L</th></tr></thead>
+                    <thead><tr><th>Asset</th><th>Side</th><th class="mono">Lots</th><th class="mono">Pips</th><th class="mono">P&amp;L</th></tr></thead>
                     <tbody id="tradesBody"></tbody>
                 </table>
             </div>
@@ -312,6 +339,104 @@
         <div class="modal-actions">
             <button class="btn ghost" onclick="closeAddAccountModal()">Cancel</button>
             <button class="btn primary" id="confirmSaveBtn" style="display:none;" onclick="confirmSaveAccount()">Confirm &amp; Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════ TRADE DETAIL POPUP ══════════ -->
+<style>
+.trade-popup-scrim { position:fixed; inset:0; z-index:38; display:none; align-items:flex-end; justify-content:center; padding:0 0 80px; }
+.trade-popup-scrim.open { display:flex; }
+
+/* ── PnL Calendar ── */
+.cal-dow-row { display:grid; gap:3px; margin-bottom:3px; }
+.cal-dow-row span { font-family:var(--font-mono); font-size:9px; font-weight:700; color:var(--muted); text-align:center; text-transform:uppercase; }
+.cal-grid { display:grid; gap:3px; }
+.cal-cell {
+    border-radius:6px; border:1px solid var(--border); min-height:62px; position:relative;
+    overflow:hidden; cursor:default; background:var(--surface-alt);
+}
+.cal-cell.has-trades { border-color:transparent; }
+.cal-cell.cal-empty { background:transparent; border-color:transparent; }
+.cal-cell.cal-pos { background: var(--pos-bg); }
+.cal-cell.cal-neg { background: var(--neg-bg); }
+/* Diagonal split — CSS clip-path triangles for pips (top-left) and $ (bottom-right) */
+.cal-cell .cal-top {
+    position:absolute; top:0; left:0; right:0; height:50%;
+    display:flex; align-items:flex-start; padding:4px 5px;
+    font-family:var(--font-mono); font-size:10px; font-weight:700;
+    clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+.cal-cell .cal-bot {
+    position:absolute; bottom:0; left:0; right:0; height:50%;
+    display:flex; align-items:flex-end; justify-content:flex-end; padding:4px 5px;
+    font-family:var(--font-mono); font-size:10px; font-weight:700;
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+.cal-cell .cal-date {
+    position:absolute; top:3px; left:4px; font-size:9px; font-weight:700;
+    color:var(--muted); font-family:var(--font-mono);
+}
+.cal-cell .cal-pip { position:absolute; top:4px; right:4px; font-size:9px; font-weight:800; }
+.cal-cell .cal-amt { position:absolute; bottom:4px; left:4px; font-size:9px; font-weight:800; }
+.cal-cell .cal-wr { position:absolute; bottom:4px; right:4px; font-size:8px; color:var(--muted); }
+.cal-week-col {
+    background:var(--surface-alt); border-radius:6px; border:1px solid var(--border);
+    display:flex; flex-direction:column; justify-content:center; align-items:center;
+    padding:4px; font-family:var(--font-mono); min-height:62px;
+}
+.cal-week-col .cwl { font-size:8px; color:var(--muted); font-weight:700; text-transform:uppercase; }
+.cal-week-col .cwa { font-size:11px; font-weight:800; margin-top:2px; }
+.cal-week-col .cwd { font-size:8px; color:var(--muted); margin-top:1px; }
+.cal-year-cell {
+    background:var(--surface-alt); border-radius:8px; border:1px solid var(--border);
+    padding:10px 8px; min-height:60px; font-family:var(--font-mono);
+    display:flex; flex-direction:column; justify-content:space-between;
+}
+.cal-year-cell.cal-pos { background:var(--pos-bg); border-color:transparent; }
+.cal-year-cell.cal-neg { background:var(--neg-bg); border-color:transparent; }
+.cal-year-cell .cyl { font-size:10px; font-weight:700; }
+.cal-year-cell .cya { font-size:14px; font-weight:800; margin-top:4px; }
+.cal-year-cell .cyp { font-size:9px; color:var(--muted); }
+.trade-popup {
+    background:var(--surface); border-radius:var(--radius-l) var(--radius-l) 0 0;
+    box-shadow:var(--elev-3); width:100%; max-width:500px; padding:20px;
+    animation: slideUp .2s ease;
+}
+@keyframes slideUp { from { transform:translateY(60px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+.tp-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+.tp-pair { font-family:var(--font-mono); font-size:18px; font-weight:800; }
+.tp-side { font-size:11px; font-weight:700; padding:4px 12px; border-radius:20px; }
+.tp-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:12px; }
+.tp-cell { background:var(--surface-alt); border-radius:8px; padding:10px 12px; }
+.tp-cell .lbl { font-size:9.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:4px; }
+.tp-cell .val { font-family:var(--font-mono); font-size:14px; font-weight:700; }
+.tp-pnl-row { display:flex; gap:10px; }
+.tp-pnl-row .tp-cell { flex:1; }
+.tp-close { width:32px; height:32px; border-radius:50%; border:none; background:var(--surface-alt); color:var(--muted); cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; }
+</style>
+
+<div class="trade-popup-scrim" id="tradePopupScrim" onclick="closeTradePopup()">
+    <div class="trade-popup" onclick="event.stopPropagation()">
+        <div class="tp-head">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <div class="tp-pair" id="tpPair">—</div>
+                <span class="tp-side" id="tpSide">—</span>
+            </div>
+            <button class="tp-close" onclick="closeTradePopup()">✕</button>
+        </div>
+        <div class="tp-grid">
+            <div class="tp-cell"><div class="lbl">Entry</div><div class="val" id="tpEntry">—</div></div>
+            <div class="tp-cell"><div class="lbl">Close</div><div class="val" id="tpClose">—</div></div>
+            <div class="tp-cell"><div class="lbl">Lots</div><div class="val" id="tpLots">—</div></div>
+            <div class="tp-cell"><div class="lbl">Stop Loss</div><div class="val" id="tpSL">—</div></div>
+            <div class="tp-cell"><div class="lbl">Take Profit</div><div class="val" id="tpTP">—</div></div>
+            <div class="tp-cell"><div class="lbl">Pips</div><div class="val" id="tpPips">—</div></div>
+        </div>
+        <div class="tp-pnl-row">
+            <div class="tp-cell"><div class="lbl">Gross P&amp;L</div><div class="val" id="tpGross">—</div></div>
+            <div class="tp-cell"><div class="lbl">Commission</div><div class="val" id="tpComm">—</div></div>
+            <div class="tp-cell"><div class="lbl">Net P&amp;L</div><div class="val" id="tpNet">—</div></div>
         </div>
     </div>
 </div>
@@ -474,6 +599,46 @@ function closeAccountOptions() {
     document.getElementById('accountOptionsScrim').classList.remove('open');
 }
 
+// ── TRADE DETAIL POPUP ──
+function openTradePopup(tradeId) {
+    const acct = getActiveAccount();
+    const t = journalTradesCache.find(x => x.id === tradeId);
+    if (!t) return;
+
+    const side = normalizeDirection(t.trade_type);
+    const result = calcPnl(t, acct);
+    const commPerLot = acct ? (Number(acct.commission_per_lot) || 0) : 0;
+    const comm = commPerLot * Number(t.lot_size || 0);
+    const gross = result.noLotSize || result.pending ? null : result.pnl + comm;
+    const pips = calcPips(t);
+
+    document.getElementById('tpPair').textContent = t.pair || '—';
+    const sideEl = document.getElementById('tpSide');
+    sideEl.textContent = side === 'sell' ? 'Sell' : 'Buy';
+    sideEl.className = 'tp-side side-pill ' + (side === 'sell' ? 'sell' : 'buy');
+    document.getElementById('tpEntry').textContent = t.entry_price ?? '—';
+    document.getElementById('tpClose').textContent = t.close_price ?? '—';
+    document.getElementById('tpLots').textContent = t.lot_size ?? '—';
+    document.getElementById('tpSL').textContent = t.sl_price ?? '—';
+    document.getElementById('tpTP').textContent = t.tp_price ?? '—';
+    document.getElementById('tpPips').textContent = pips !== null ? (pips >= 0 ? '+' : '') + pips : '—';
+    document.getElementById('tpPips').style.color = pips > 0 ? 'var(--pos)' : pips < 0 ? 'var(--neg)' : '';
+
+    const grossText = gross !== null ? (gross >= 0 ? '+' : '') + '$' + gross.toFixed(2) : '—';
+    const netText = result.noLotSize || result.pending ? '—' : (result.pnl >= 0 ? '+' : '') + '$' + result.pnl.toFixed(2);
+    document.getElementById('tpGross').textContent = grossText;
+    document.getElementById('tpGross').style.color = gross >= 0 ? 'var(--pos)' : 'var(--neg)';
+    document.getElementById('tpComm').textContent = comm > 0 ? '-$' + comm.toFixed(2) : '$0';
+    document.getElementById('tpComm').style.color = comm > 0 ? 'var(--neg)' : '';
+    document.getElementById('tpNet').textContent = netText;
+    document.getElementById('tpNet').style.color = result.pnl >= 0 ? 'var(--pos)' : 'var(--neg)';
+
+    document.getElementById('tradePopupScrim').classList.add('open');
+}
+function closeTradePopup() { document.getElementById('tradePopupScrim').classList.remove('open'); }
+
+
+
 async function acctOptSetStatus(status) {
     if (!_acctOptId) return;
     const { error } = await sb.from('accounts').update({ status }).eq('id', _acctOptId);
@@ -524,7 +689,7 @@ async function renderActiveAccount() {
         trades = journalTradesCache.filter(t => tradeIds.includes(t.id));
         if (!trades.length) {
             const { data: fetched } = await sb.from('trades').select(
-                'id,pair,trade_type,entry_price,close_price,lot_size,status,close_time,is_intraday'
+                'id,pair,trade_type,entry_price,close_price,sl_price,tp_price,lot_size,status,open_time,close_time,is_intraday'
             ).in('id', tradeIds).eq('is_intraday', true);
             trades = fetched || [];
         }
@@ -534,14 +699,16 @@ async function renderActiveAccount() {
     trades.sort((a, b) => new Date(a.close_time || 0) - new Date(b.close_time || 0));
 
     // ── Compute per-trade P&L ──
-    let netPnl = 0, anyAiSourced = false;
+    let netPnl = 0, anyAiSourced = false, commissionTotal = 0;
     let bestPnl = null, worstPnl = null;
     let winCount = 0, totalCount = 0;
+    const commPerLot = Number(acct.commission_per_lot) || 0;
     const tradeResults = trades.map(t => {
         const result = calcPnl(t, acct);
         if (!result.noLotSize && !result.pending) {
             netPnl += result.pnl;
             totalCount++;
+            commissionTotal += commPerLot * Number(t.lot_size || 0);
             if (result.pnl > 0) winCount++;
             if (bestPnl === null || result.pnl > bestPnl.pnl) bestPnl = { pnl: result.pnl, pair: t.pair, date: t.close_time };
             if (worstPnl === null || result.pnl < worstPnl.pnl) worstPnl = { pnl: result.pnl, pair: t.pair, date: t.close_time };
@@ -568,6 +735,9 @@ async function renderActiveAccount() {
     // ── Trade table rows ──
     const rows = [...tradeResults].reverse().map(({ t, result }) => {
         const side = normalizeDirection(t.trade_type);
+        const pips = calcPips(t);
+        const pipsText = pips !== null ? (pips >= 0 ? '+' : '') + pips : '—';
+        const pipsColor = pips > 0 ? 'var(--pos)' : pips < 0 ? 'var(--neg)' : '';
         let pnlCell, badge = '';
         if (result.noLotSize) {
             pnlCell = '<span style="color:var(--muted);font-size:11px;">⚠ lot size not logged</span>';
@@ -581,11 +751,11 @@ async function renderActiveAccount() {
                     : '';
             pnlCell = `<span class="${pnl>=0?'pnl-pos':'pnl-neg'}">${pnl>=0?'+':''}$${pnl.toFixed(2)}</span>${badge}`;
         }
-        const dateStr = t.close_time ? new Date(t.close_time).toLocaleDateString(undefined, { month:'short', day:'numeric' }) : '—';
-        return `<tr>
+        return `<tr style="cursor:pointer;" onclick="openTradePopup('${t.id}')">
             <td>${t.pair || '—'}</td>
             <td><span class="side-pill ${side==='sell'?'sell':'buy'}">${side==='sell'?'Sell':'Buy'}</span></td>
             <td class="mono">${t.lot_size ?? '—'}</td>
+            <td class="mono" style="color:${pipsColor}">${pipsText}</td>
             <td class="mono">${pnlCell}</td>
         </tr>`;
     }).join('');
@@ -594,7 +764,7 @@ async function renderActiveAccount() {
         ? `<div style="background:var(--pastel-lemon);color:#5c4a00;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:10px;">☁️ Some values use AI-looked-up contract specs — validate manually against your broker.</div>`
         : '';
 
-    document.getElementById('tradesBody').innerHTML = rows || '<tr><td colspan="4" class="empty-note">No intraday trades assigned yet. Run Sync, then assign trades via the Journal close modal.</td></tr>';
+    document.getElementById('tradesBody').innerHTML = rows || '<tr><td colspan="5" class="empty-note">No intraday trades assigned yet. Run Sync, then assign trades via the Journal close modal.</td></tr>';
     document.getElementById('tradesHeading').textContent = `Intraday Trades — ${acct.name}`;
     const bannerEl = document.getElementById('assetSpecBanner');
     if (bannerEl) bannerEl.innerHTML = banner;
@@ -613,10 +783,12 @@ async function renderActiveAccount() {
     const winRate = totalCount > 0 ? Math.round(winCount / totalCount * 100) : null;
     const elWR = document.getElementById('balWinRate');
     if (elWR) { elWR.textContent = winRate !== null ? winRate + '% win rate' : '—'; }
+    const elComm = document.getElementById('balCommTotal');
+    if (elComm) elComm.textContent = commissionTotal > 0 ? '-$' + commissionTotal.toFixed(2) : '$0';
     const elBest = document.getElementById('balBest');
-    if (elBest) elBest.textContent = bestPnl ? `Best: +$${bestPnl.pnl.toFixed(2)} (${bestPnl.pair})` : '—';
+    if (elBest) elBest.textContent = bestPnl ? `+$${bestPnl.pnl.toFixed(2)} (${bestPnl.pair})` : '—';
     const elWorst = document.getElementById('balWorst');
-    if (elWorst) elWorst.textContent = worstPnl && worstPnl.pnl < 0 ? `Worst: -$${Math.abs(worstPnl.pnl).toFixed(2)} (${worstPnl.pair})` : '—';
+    if (elWorst) elWorst.textContent = worstPnl && worstPnl.pnl < 0 ? `-$${Math.abs(worstPnl.pnl).toFixed(2)} (${worstPnl.pair})` : '—';
 
     // ── Prop rules block ──
     if (acct.account_kind === 'prop') {
@@ -646,14 +818,36 @@ async function renderActiveAccount() {
         document.getElementById('rulesGrid').style.display = 'none';
     }
 
-    // ── Equity curve ──
+    // ── Equity curve + Calendar ──
+    _calTradeResults = tradeResults;
     renderEquityCurve(tradeResults, Number(acct.starting_balance));
+    renderCalendar();
 }
 
 
 // ═══════════════════════════════════════════════════════════
 // P&L CALC
 // ═══════════════════════════════════════════════════════════
+// ── PIP CALCULATION ──
+// Returns pip size for a symbol (the unit of the 4th/2nd decimal place).
+// JPY pairs use 0.01, XAU uses 0.1, XAG uses 0.01, most FX use 0.0001.
+function pipSize(pair) {
+    if (!pair) return 0.0001;
+    const p = pair.toUpperCase().replace(/[^A-Z]/g, '');
+    if (p.endsWith('JPY') || p.startsWith('JPY')) return 0.01;
+    if (p.startsWith('XAU')) return 0.1;
+    if (p.startsWith('XAG')) return 0.01;
+    if (p.startsWith('XPT') || p.startsWith('XPD')) return 0.01;
+    return 0.0001;
+}
+
+function calcPips(t) {
+    if (t.entry_price == null || t.close_price == null) return null;
+    const dir = normalizeDirection(t.trade_type) === 'sell' ? -1 : 1;
+    const rawMove = (Number(t.close_price) - Number(t.entry_price)) * dir;
+    return parseFloat((rawMove / pipSize(t.pair)).toFixed(1));
+}
+
 function normalizeDirection(tradeType) {
     if (!tradeType) return 'buy';
     const v = String(tradeType).toLowerCase();
@@ -793,12 +987,185 @@ async function ensureAssetSpecLookup(symbol) {
 // ═══════════════════════════════════════════════════════════
 // SYNC FROM JOURNAL (read-only)
 // ═══════════════════════════════════════════════════════════
+// ── PnL CALENDAR ──
+let calView = 'month';
+let calRefDate = new Date();
+let _calTradeResults = []; // set by renderActiveAccount each time
+
+function calSetView(v) {
+    calView = v;
+    renderCalendar();
+}
+function calNav(dir) {
+    const d = new Date(calRefDate);
+    if (calView === 'week') d.setDate(d.getDate() + dir * 7);
+    else if (calView === 'month') d.setMonth(d.getMonth() + dir);
+    else d.setFullYear(d.getFullYear() + dir);
+    calRefDate = d;
+    renderCalendar();
+}
+
+function calDateKey(d) {
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+// Build a map: dateKey -> { totalPnl, totalPips, tradeCount, wins }
+function buildCalDayMap(tradeResults) {
+    const map = {};
+    tradeResults.forEach(({ t, result }) => {
+        if (!t.close_time || result.pending || result.noLotSize) return;
+        const key = calDateKey(new Date(t.close_time));
+        if (!map[key]) map[key] = { totalPnl: 0, totalPips: 0, tradeCount: 0, wins: 0 };
+        map[key].totalPnl += result.pnl;
+        const pips = calcPips(t);
+        if (pips !== null) map[key].totalPips += pips;
+        map[key].tradeCount++;
+        if (result.pnl > 0) map[key].wins++;
+    });
+    return map;
+}
+
+function calCellHtml(dayMap, dateObj, inMonth) {
+    if (!inMonth) return '<div class="cal-cell cal-empty"></div>';
+    const key = calDateKey(dateObj);
+    const day = dayMap[key];
+    if (!day) return `<div class="cal-cell"><div class="cal-date">${dateObj.getDate()}</div></div>`;
+    const posClass = day.totalPnl >= 0 ? 'cal-pos' : 'cal-neg';
+    const amtText = (day.totalPnl >= 0 ? '+' : '') + '$' + Math.abs(day.totalPnl).toFixed(0);
+    const pipText = (day.totalPips >= 0 ? '+' : '') + day.totalPips.toFixed(1) + 'p';
+    const wr = day.tradeCount > 0 ? Math.round(day.wins / day.tradeCount * 100) + '% WR' : '';
+    return `<div class="cal-cell has-trades ${posClass}">
+        <div class="cal-date">${dateObj.getDate()}</div>
+        <div class="cal-pip" style="color:${day.totalPips>=0?'var(--pos)':'var(--neg)'}">${pipText}</div>
+        <div class="cal-amt">${amtText}</div>
+        <div class="cal-wr">${wr}</div>
+    </div>`;
+}
+
+function weekColHtml(dayMap, weekDays) {
+    let weekPnl = 0, days = 0;
+    weekDays.forEach(d => {
+        const key = calDateKey(d);
+        if (dayMap[key]) { weekPnl += dayMap[key].totalPnl; days++; }
+    });
+    const posClass = weekPnl >= 0 ? 'cal-pos' : 'cal-neg';
+    const amtText = (weekPnl >= 0 ? '+' : '') + '$' + Math.abs(weekPnl).toFixed(0);
+    return `<div class="cal-week-col ${days > 0 ? posClass : ''}">
+        <div class="cwl">Weekly</div>
+        <div class="cwa">${days > 0 ? amtText : '—'}</div>
+        <div class="cwd">${days} day${days !== 1 ? 's' : ''}</div>
+    </div>`;
+}
+
+function renderCalendar() {
+    // Update view toggle buttons
+    document.querySelectorAll('[data-cv]').forEach(b =>
+        b.style.background = b.dataset.cv === calView ? 'var(--accent)' : '');
+    document.querySelectorAll('[data-cv]').forEach(b =>
+        b.style.color = b.dataset.cv === calView ? 'var(--accent-ink)' : '');
+
+    const dayMap = buildCalDayMap(_calTradeResults);
+    const grid = document.getElementById('calGrid');
+    const label = document.getElementById('calLabel');
+    const stats = document.getElementById('calStats');
+    if (!grid) return;
+
+    if (calView === 'week') {
+        // Find Monday of the current week
+        const mon = new Date(calRefDate);
+        const dow = mon.getDay() || 7;
+        mon.setDate(mon.getDate() - dow + 1);
+        const days = Array.from({length:5}, (_, i) => { const d = new Date(mon); d.setDate(d.getDate()+i); return d; });
+        const dowNames = ['Mon','Tue','Wed','Thu','Fri'];
+
+        let weekPnl = 0, weekPips = 0, tradeDays = 0;
+        days.forEach(d => {
+            const key = calDateKey(d);
+            if (dayMap[key]) { weekPnl += dayMap[key].totalPnl; weekPips += dayMap[key].totalPips; tradeDays++; }
+        });
+
+        const dowRow = `<div class="cal-dow-row" style="grid-template-columns:repeat(5,1fr)">${dowNames.map(n => `<span>${n}</span>`).join('')}</div>`;
+        const cells = `<div class="cal-grid" style="grid-template-columns:repeat(5,1fr)">${days.map(d => calCellHtml(dayMap, d, true)).join('')}</div>`;
+        grid.innerHTML = dowRow + cells;
+        label.textContent = days[0].toLocaleDateString(undefined,{month:'short',day:'numeric'}) + ' – ' + days[4].toLocaleDateString(undefined,{month:'short',day:'numeric'});
+        const statsText = tradeDays > 0 ? (weekPnl>=0?'+':'') + '$' + Math.abs(weekPnl).toFixed(2) + '  ' + (weekPips>=0?'+':'') + weekPips.toFixed(1) + 'p  ' + tradeDays + ' days' : '—';
+        stats.textContent = statsText;
+        stats.style.color = weekPnl >= 0 ? 'var(--pos)' : 'var(--neg)';
+
+    } else if (calView === 'month') {
+        const ref = calRefDate;
+        const firstDay = new Date(ref.getFullYear(), ref.getMonth(), 1);
+        const lastDay = new Date(ref.getFullYear(), ref.getMonth()+1, 0);
+        // Start from Sunday of the first week
+        const startSun = new Date(firstDay);
+        startSun.setDate(startSun.getDate() - startSun.getDay());
+
+        const dowNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat','Weekly'];
+        const dowRow = `<div class="cal-dow-row" style="grid-template-columns:repeat(7,1fr) 56px">${dowNames.map(n=>`<span>${n}</span>`).join('')}</div>`;
+
+        let rows = '', monthPnl = 0, tradeDays = 0;
+        let cursor = new Date(startSun);
+        while (cursor <= lastDay || cursor.getDay() !== 0) {
+            const weekDays = Array.from({length:7}, (_, i) => { const d = new Date(cursor); d.setDate(d.getDate()+i); return d; });
+            const weekFxDays = weekDays.slice(1,6); // Mon-Fri
+            rows += `<div class="cal-grid" style="grid-template-columns:repeat(7,1fr) 56px;margin-bottom:3px;">`;
+            weekDays.forEach(d => {
+                const inMonth = d.getMonth() === ref.getMonth();
+                rows += calCellHtml(dayMap, d, inMonth);
+                if (inMonth && dayMap[calDateKey(d)]) { monthPnl += dayMap[calDateKey(d)].totalPnl; tradeDays++; }
+            });
+            rows += weekColHtml(dayMap, weekFxDays);
+            rows += '</div>';
+            cursor.setDate(cursor.getDate() + 7);
+        }
+
+        grid.innerHTML = dowRow + rows;
+        label.textContent = ref.toLocaleDateString(undefined, {month:'long', year:'numeric'});
+        stats.textContent = tradeDays > 0 ? (monthPnl>=0?'+':'') + '$' + Math.abs(monthPnl).toFixed(2) + ' · ' + tradeDays + ' days' : '—';
+        stats.style.color = monthPnl >= 0 ? 'var(--pos)' : 'var(--neg)';
+
+    } else { // year
+        const ref = calRefDate;
+        let yearPnl = 0;
+        let cells = '<div class="cal-grid" style="grid-template-columns:repeat(4,1fr);gap:6px;">';
+        for (let m = 0; m < 12; m++) {
+            const mStart = new Date(ref.getFullYear(), m, 1);
+            const mEnd = new Date(ref.getFullYear(), m+1, 0);
+            let mPnl = 0, mPips = 0, mDays = 0;
+            for (let d = new Date(mStart); d <= mEnd; d.setDate(d.getDate()+1)) {
+                const key = calDateKey(d);
+                if (dayMap[key]) { mPnl += dayMap[key].totalPnl; mPips += dayMap[key].totalPips; mDays++; }
+            }
+            yearPnl += mPnl;
+            const posClass = mDays > 0 ? (mPnl >= 0 ? 'cal-pos' : 'cal-neg') : '';
+            const monthName = mStart.toLocaleDateString(undefined,{month:'short'});
+            const amtText = mDays > 0 ? (mPnl>=0?'+':'') + '$' + Math.abs(mPnl).toFixed(0) : '—';
+            const pipText = mDays > 0 ? (mPips>=0?'+':'') + mPips.toFixed(0) + 'p' : '';
+            cells += `<div class="cal-year-cell ${posClass}">
+                <div class="cyl">${monthName}</div>
+                <div class="cya">${amtText}</div>
+                <div class="cyp">${pipText}${mDays > 0 ? ' · ' + mDays + 'd' : ''}</div>
+            </div>`;
+        }
+        cells += '</div>';
+        grid.innerHTML = cells;
+        label.textContent = String(ref.getFullYear());
+        stats.textContent = (yearPnl>=0?'+':'') + '$' + Math.abs(yearPnl).toFixed(2) + ' YTD';
+        stats.style.color = yearPnl >= 0 ? 'var(--pos)' : 'var(--neg)';
+    }
+}
+
 // ── EQUITY CURVE ──
 let _equityChart = null;
 function renderEquityCurve(tradeResults, startBalance) {
     const canvas = document.getElementById('equityCanvas');
-    if (!canvas) return;
-    // Build cumulative P&L series sorted by close_time
+    if (!canvas || typeof Chart === 'undefined') return;
+
+    // Resolve CSS variables at render time so they work in both light and dark mode
+    const style = getComputedStyle(document.body);
+    const mutedColor = style.getPropertyValue('--muted').trim() || '#888';
+    const borderColor = style.getPropertyValue('--border').trim() || '#ddd';
+
     const points = [{ x: 'Start', y: startBalance }];
     let running = startBalance;
     tradeResults.forEach(({ t, result }) => {
@@ -807,20 +1174,23 @@ function renderEquityCurve(tradeResults, startBalance) {
         const label = new Date(t.close_time).toLocaleDateString(undefined, { month:'short', day:'numeric' });
         points.push({ x: label, y: parseFloat(running.toFixed(2)) });
     });
+
     const labels = points.map(p => p.x);
     const data = points.map(p => p.y);
-    const color = data[data.length - 1] >= startBalance ? '#7FE0A8' : '#FF9AA8';
+    const isUp = data[data.length - 1] >= startBalance;
+    const lineColor = isUp
+        ? (style.getPropertyValue('--pos').trim() || '#1E9E5A')
+        : (style.getPropertyValue('--neg').trim() || '#E0475A');
 
     if (_equityChart) { _equityChart.destroy(); _equityChart = null; }
-    if (typeof Chart === 'undefined') return; // Chart.js not loaded yet
     _equityChart = new Chart(canvas, {
         type: 'line',
         data: {
             labels,
             datasets: [{
                 data,
-                borderColor: color,
-                backgroundColor: color + '22',
+                borderColor: lineColor,
+                backgroundColor: lineColor + '22',
                 borderWidth: 2,
                 pointRadius: data.length > 30 ? 0 : 3,
                 fill: true,
@@ -832,8 +1202,14 @@ function renderEquityCurve(tradeResults, startBalance) {
             maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: {
-                x: { ticks: { maxTicksLimit: 8, color: 'var(--muted)', font: { size: 10 } }, grid: { display: false } },
-                y: { ticks: { color: 'var(--muted)', font: { size: 10 }, callback: v => '$' + v.toLocaleString() }, grid: { color: 'var(--border)' } }
+                x: {
+                    ticks: { maxTicksLimit: 8, color: mutedColor, font: { size: 10 } },
+                    grid: { display: false }
+                },
+                y: {
+                    ticks: { color: mutedColor, font: { size: 10 }, callback: v => '$' + v.toLocaleString() },
+                    grid: { color: borderColor }
+                }
             }
         }
     });
@@ -878,7 +1254,7 @@ async function syncFromJournal() {
     btn.disabled = true; btn.textContent = 'Syncing…';
     try {
         const { data, error } = await sb.from('trades').select(
-            'id,pair,trade_type,entry_price,close_price,lot_size,status,close_time'
+            'id,pair,trade_type,entry_price,close_price,sl_price,tp_price,lot_size,status,open_time,close_time'
         ).eq('status', 'closed').eq('is_intraday', true);
         if (error) throw error;
         journalTradesCache = data || [];
@@ -1081,18 +1457,26 @@ function toggleDrawer(open) {
 }
 function toggleTheme() {
     const body = document.body;
-    const isDark = body.getAttribute('data-theme') === 'dark';
-    const next = isDark ? 'light' : 'dark';
+    const current = body.getAttribute('data-theme') || 'light';
+    const next = current === 'light' ? 'dark' : current === 'dark' ? 'black' : 'light';
     body.setAttribute('data-theme', next);
     localStorage.setItem('pnl_theme', next);
-    document.getElementById('themeLabel').textContent = isDark ? 'Light mode' : 'Dark mode';
+    const labels = { light: 'Light', dark: 'Dark', black: 'OLED Black' };
+    const lbl = document.getElementById('themeLabel');
+    if (lbl) lbl.textContent = labels[next];
+    // Re-render chart with new colors
+    if (_equityChart && _calTradeResults.length) {
+        const acct = getActiveAccount();
+        if (acct) renderEquityCurve(_calTradeResults, Number(acct.starting_balance));
+    }
 }
 (function restoreTheme() {
     const saved = localStorage.getItem('pnl_theme');
-    if (saved === 'dark' || saved === 'light') {
+    if (saved === 'dark' || saved === 'light' || saved === 'black') {
         document.body.setAttribute('data-theme', saved);
         const lbl = document.getElementById('themeLabel');
-        if (lbl) lbl.textContent = saved === 'dark' ? 'Dark mode' : 'Light mode';
+        const labels = { light: 'Light', dark: 'Dark', black: 'OLED Black' };
+        if (lbl) lbl.textContent = labels[saved];
     }
 })();
 
