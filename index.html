@@ -311,7 +311,7 @@
 // ═══════════════════════════════════════════════════════════
 const SUPABASE_URL = "https://klgibccfziktzvlomwve.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtsZ2liY2NmemlrdHp2bG9td3ZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNDY2MTYsImV4cCI6MjA5NTgyMjYxNn0.BdmDWJWJGjytVSTTQYEAeLiYtJCFX4GaGeHpDEvbHEM";
-const GEMINI_WORKER_URL = "https://pnl-worker.aicube-apps.workers.dev/";
+const GEMINI_WORKER_URL = "https://profit-tracker.aicube-apps.workers.dev/";
 
 // IC Markets preset — published raw-spread commission as of last check.
 // FLAG: verify against ic markets' current published rates before trusting — rates change.
@@ -661,9 +661,19 @@ function toggleDrawer(open) {
 function toggleTheme() {
     const body = document.body;
     const isDark = body.getAttribute('data-theme') === 'dark';
-    body.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    const next = isDark ? 'light' : 'dark';
+    body.setAttribute('data-theme', next);
+    localStorage.setItem('pnl_theme', next);
     document.getElementById('themeLabel').textContent = isDark ? 'Light mode' : 'Dark mode';
 }
+(function restoreTheme() {
+    const saved = localStorage.getItem('pnl_theme');
+    if (saved === 'dark' || saved === 'light') {
+        document.body.setAttribute('data-theme', saved);
+        const lbl = document.getElementById('themeLabel');
+        if (lbl) lbl.textContent = saved === 'dark' ? 'Dark mode' : 'Light mode';
+    }
+})();
 
 checkExistingSession();
 </script>
