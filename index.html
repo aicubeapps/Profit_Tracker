@@ -561,45 +561,98 @@
 
 <!-- ══════════ BROKER/FIRM PROFILE MODAL ══════════ -->
 <div class="modal-scrim" id="profileModalScrim">
-    <div class="modal" style="max-width:480px;">
+    <div class="modal" style="max-width:520px;">
         <h3 id="profileModalTitle">New Profile</h3>
         <div class="sub" id="profileModalSub">Shared settings used across accounts</div>
 
-        <div class="field"><label>Profile Name</label>
-            <input id="pmName" placeholder="e.g. FTMO, IC Markets Raw">
+        <!-- Step 1: Name + Fetch -->
+        <div id="pmStep1">
+            <div class="field"><label>Profile Name</label>
+                <input id="pmName" placeholder="e.g. FTMO Phase 2, IC Markets Raw">
+            </div>
+            <div style="display:flex;gap:8px;align-items:flex-end;">
+                <div class="field" style="flex:1;margin-bottom:0;"><label>Firm / Broker Name (for AI lookup)</label>
+                    <input id="pmFirmName" placeholder="e.g. FTMO, IC Markets, Exness">
+                </div>
+                <button class="btn primary" style="padding:9px 16px;font-size:12px;white-space:nowrap;" onclick="fetchProfileRules()">Fetch with AI</button>
+            </div>
+            <div id="pmFetchMsg" style="font-size:11.5px;margin-top:8px;"></div>
         </div>
 
-        <!-- Prop fields -->
-        <div id="pmPropFields">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                <div class="field"><label>Commission / Lot (USD)</label><input id="pmCommLot" type="number" step="0.01" placeholder="3.50"></div>
-                <div class="field"><label>Daily Reset (UTC hour)</label><input id="pmReset" type="number" min="0" max="23" placeholder="22"></div>
-                <div class="field"><label>Profit Target %</label><input id="pmTarget" type="number" step="0.1" placeholder="10"></div>
-                <div class="field"><label>Drawdown %</label><input id="pmDD" type="number" step="0.1" placeholder="10"></div>
-                <div class="field"><label>Daily Loss Limit %</label><input id="pmDaily" type="number" step="0.1" placeholder="5"></div>
-                <div class="field"><label>Drawdown Type</label>
-                    <select id="pmDDType">
-                        <option value="static">Static</option>
-                        <option value="trailing">Trailing</option>
-                        <option value="trailing_to_be">Trailing to BE</option>
-                    </select>
+        <!-- Step 2: Review screen — shown after fetch -->
+        <div id="pmStep2" style="display:none;margin-top:14px;">
+            <div style="background:var(--surface-alt);border-radius:8px;padding:9px 12px;font-size:11.5px;color:var(--muted);margin-bottom:14px;">
+                AI-suggested values below — please verify against your firm/broker's dashboard before saving. Each field is editable.
+            </div>
+
+            <!-- Prop rules — only shown for prop profiles -->
+            <div id="pmPropRules" style="display:none;">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:8px;">Prop Firm Rules</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+                    <div class="field"><label>Profit Target % <span class="ai-tag" id="tagTarget">AI</span></label><input id="pmTarget" type="number" step="0.1"></div>
+                    <div class="field"><label>Drawdown % <span class="ai-tag" id="tagDD">AI</span></label><input id="pmDD" type="number" step="0.1"></div>
+                    <div class="field"><label>Daily Loss Limit % <span class="ai-tag" id="tagDaily">AI</span></label><input id="pmDaily" type="number" step="0.1"></div>
+                    <div class="field"><label>Daily Reset UTC Hour <span class="ai-tag" id="tagReset">AI</span></label><input id="pmReset" type="number" min="0" max="23" step="1" placeholder="22 = 5pm NY EST"></div>
+                    <div class="field" style="grid-column:span 2;"><label>Drawdown Type <span class="ai-tag" id="tagDDType">AI</span></label>
+                        <select id="pmDDType"><option value="static">Static</option><option value="trailing">Trailing</option><option value="trailing_to_be">Trailing to Breakeven</option></select>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Broker fields -->
-        <div id="pmBrokerFields" style="display:none;">
-            <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Commission per standard lot by instrument class (USD)</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
-                <div class="field"><label>Forex</label><input id="pmCommFx" type="number" step="0.01" placeholder="7.00"></div>
-                <div class="field"><label>Indices</label><input id="pmCommIdx" type="number" step="0.01" placeholder="15.00"></div>
-                <div class="field"><label>Commodities</label><input id="pmCommCom" type="number" step="0.01" placeholder="10.00"></div>
-            </div>
+            <!-- Asset class sections — 4 collapsible blocks -->
+            <!-- FOREX -->
+            <details open>
+                <summary style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);cursor:pointer;margin-bottom:8px;list-style:none;">▸ Forex <span id="pmFxConf" style="font-weight:400;margin-left:6px;"></span></summary>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;padding-left:8px;">
+                    <div class="field"><label>Commission / Lot (USD)</label><input id="pmCommFx" type="number" step="0.01" placeholder="7.00"></div>
+                    <div class="field"><label>Lot Size (units)</label><input id="pmLotFx" type="number" placeholder="100000"></div>
+                    <div class="field"><label>Pip Size</label><input id="pmPipFx" type="number" step="0.00001" placeholder="0.0001"></div>
+                    <div class="field"><label>Point Value USD / Lot</label><input id="pmPvFx" type="number" step="0.01" placeholder="10.00"></div>
+                    <div class="field" style="grid-column:span 2;"><label>Spread Type</label>
+                        <select id="pmSpreadFx"><option value="">— Select —</option><option value="raw_plus_commission">Raw + Commission</option><option value="spread_only">Spread Only</option></select>
+                    </div>
+                </div>
+            </details>
+
+            <!-- METALS -->
+            <details open>
+                <summary style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);cursor:pointer;margin-bottom:8px;list-style:none;">▸ Metals <span id="pmMetalConf" style="font-weight:400;margin-left:6px;"></span></summary>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;padding-left:8px;">
+                    <div class="field"><label>Commission / Lot (USD)</label><input id="pmCommMetal" type="number" step="0.01" placeholder="0.00"></div>
+                    <div class="field"><label>XAU Lot Size (oz)</label><input id="pmLotXau" type="number" placeholder="100"></div>
+                    <div class="field"><label>XAG Lot Size (oz)</label><input id="pmLotXag" type="number" placeholder="5000"></div>
+                    <div class="field"><label>XAU Pip Size</label><input id="pmPipXau" type="number" step="0.001" placeholder="0.01"></div>
+                    <div class="field"><label>XAU Point Value USD / Lot</label><input id="pmPvXau" type="number" step="0.01" placeholder="1.00"></div>
+                    <div class="field"><label>XAG Point Value USD / Lot</label><input id="pmPvXag" type="number" step="0.01" placeholder="50.00"></div>
+                </div>
+            </details>
+
+            <!-- INDICES -->
+            <details open>
+                <summary style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);cursor:pointer;margin-bottom:8px;list-style:none;">▸ Indices <span id="pmIdxConf" style="font-weight:400;margin-left:6px;"></span></summary>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;padding-left:8px;">
+                    <div class="field"><label>Commission / Lot (USD)</label><input id="pmCommIdx" type="number" step="0.01" placeholder="15.00"></div>
+                    <div class="field"><label>Lot Size (contracts)</label><input id="pmLotIdx" type="number" placeholder="1"></div>
+                    <div class="field"><label>Point Value USD / Lot</label><input id="pmPvIdx" type="number" step="0.01" placeholder="1.00"></div>
+                </div>
+            </details>
+
+            <!-- COMMODITIES -->
+            <details open>
+                <summary style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);cursor:pointer;margin-bottom:8px;list-style:none;">▸ Commodities <span id="pmComConf" style="font-weight:400;margin-left:6px;"></span></summary>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;padding-left:8px;">
+                    <div class="field"><label>Commission / Lot (USD)</label><input id="pmCommCom" type="number" step="0.01" placeholder="10.00"></div>
+                    <div class="field"><label>Lot Size (contracts)</label><input id="pmLotCom" type="number" placeholder="1"></div>
+                    <div class="field"><label>Point Value USD / Lot</label><input id="pmPvCom" type="number" step="0.01" placeholder="10.00"></div>
+                </div>
+            </details>
+
+            <div id="pmAiNotes" style="font-size:11px;color:var(--muted);margin-top:4px;margin-bottom:8px;font-style:italic;"></div>
         </div>
 
         <div class="modal-actions">
             <button class="btn ghost" onclick="closeProfileModal()">Cancel</button>
-            <button class="btn primary" onclick="saveProfile()">Save Profile</button>
+            <button class="btn primary" id="pmSaveBtn" style="display:none;" onclick="saveProfile()">Confirm &amp; Save</button>
         </div>
     </div>
 </div>
@@ -800,7 +853,7 @@ function openTradePopup(tradeId) {
     const commPerLot = resolveCommission(t, acct);
     const comm = commPerLot * Number(t.lot_size || 0);
     const gross = result.noLotSize || result.pending ? null : result.pnl + comm;
-    const pips = calcPips(t);
+    const pips = calcPips(t, acct);
 
     document.getElementById('tpPair').textContent = t.pair || '—';
     const sideEl = document.getElementById('tpSide');
@@ -930,7 +983,7 @@ async function renderActiveAccount() {
     // ── Trade table rows ──
     const rows = [...tradeResults].reverse().map(({ t, result }) => {
         const side = normalizeDirection(t.trade_type);
-        const pips = calcPips(t);
+        const pips = calcPips(t, acct);
         const pipsText = pips !== null ? (pips >= 0 ? '+' : '') + pips : '—';
         const pipsColor = pips > 0 ? 'var(--pos)' : pips < 0 ? 'var(--neg)' : '';
         let pnlCell, badge = '';
@@ -1039,11 +1092,14 @@ function pipSize(pair) {
     return 0.0001;
 }
 
-function calcPips(t) {
+function calcPips(t, acct) {
     if (t.entry_price == null || t.close_price == null) return null;
+    const profile = acct?.broker_profile_id ? brokerProfiles.find(p => p.id === acct.broker_profile_id) : null;
+    const spec = resolveContractSpec(t.pair, profile);
+    const pSize = spec.pipSize ?? pipSize(t.pair);
     const dir = normalizeDirection(t.trade_type) === 'sell' ? -1 : 1;
     const rawMove = (Number(t.close_price) - Number(t.entry_price)) * dir;
-    return parseFloat((rawMove / pipSize(t.pair)).toFixed(1));
+    return parseFloat((rawMove / pSize).toFixed(1));
 }
 
 function normalizeDirection(tradeType) {
@@ -1093,25 +1149,84 @@ function classifySymbol(pair) {
 }
 
 
-// Resolve the effective commission per lot for a trade, considering broker profile
-// with per-class rates (forex/indices/commodities) taking precedence over flat rate.
+// Resolve the effective commission per lot for a trade using profile's per-class rates.
 function resolveCommission(t, acct) {
     if (!acct) return 0;
     const profile = acct.broker_profile_id ? brokerProfiles.find(p => p.id === acct.broker_profile_id) : null;
     if (profile) {
-        const cls = classifySymbol(t.pair);
-        if (profile.profile_type === 'broker') {
-            if (cls.kind === 'direct_usd' || cls.kind === 'usd_base' || cls.kind === 'cross_pair') {
-                return Number(profile.commission_forex || profile.commission_per_lot || 0);
+        const cls = classifySymbol(t.pair, profile);
+        if (cls.kind === 'direct_usd' || cls.kind === 'usd_base' || cls.kind === 'cross_pair') {
+            const base = (t.pair || '').toUpperCase().slice(0, 3);
+            if (METAL_OZ_PER_LOT[base] || t.pair?.toUpperCase().includes('XA')) {
+                return Number(profile.commission_metals ?? profile.commission_per_lot ?? 0);
             }
-            // needs_lookup — check spec to determine if index or commodity
-            const spec = assetSpecsCache[t.pair];
-            if (spec && spec.point_value_usd != null) return Number(profile.commission_indices || profile.commission_per_lot || 0);
-            return Number(profile.commission_commodities || profile.commission_per_lot || 0);
+            return Number(profile.commission_forex ?? profile.commission_per_lot ?? 0);
         }
-        return Number(profile.commission_per_lot || 0);
+        // needs_lookup — check spec to determine if index or commodity
+        const spec = assetSpecsCache[t.pair];
+        if (spec && spec.point_value_usd != null) return Number(profile.commission_indices ?? profile.commission_per_lot ?? 0);
+        return Number(profile.commission_commodities ?? profile.commission_per_lot ?? 0);
     }
     return Number(acct.commission_per_lot || 0);
+}
+
+// Resolve profile-specific contract spec for a symbol.
+// Profile values take precedence over hardcoded defaults.
+function resolveContractSpec(pair, profile) {
+    if (!pair) return null;
+    const p = pair.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const metalBase = Object.keys(METAL_OZ_PER_LOT).find(m => p.startsWith(m));
+
+    if (p.includes('XAU') || p.startsWith('XAU')) {
+        return {
+            kind: 'direct_usd',
+            contractSize: profile?.lot_size_xau ?? METAL_OZ_PER_LOT['XAU'],
+            pipSize: profile?.pip_size_xau ?? 0.01,
+            pointValueUsd: profile?.point_value_metals_xau_usd ?? null
+        };
+    }
+    if (p.includes('XAG') || p.startsWith('XAG')) {
+        return {
+            kind: 'direct_usd',
+            contractSize: profile?.lot_size_xag ?? METAL_OZ_PER_LOT['XAG'],
+            pipSize: 0.001,
+            pointValueUsd: profile?.point_value_metals_xag_usd ?? null
+        };
+    }
+    if (metalBase) {
+        return {
+            kind: 'direct_usd',
+            contractSize: profile?.lot_size_other_metals ?? METAL_OZ_PER_LOT[metalBase],
+            pipSize: 0.01,
+            pointValueUsd: null
+        };
+    }
+    if (p.length === 6 && p.endsWith('USD')) {
+        return {
+            kind: 'direct_usd',
+            contractSize: profile?.lot_size_forex ?? STANDARD_FX_LOT,
+            pipSize: p.startsWith('JPY') ? (profile?.pip_size_jpy_pairs ?? 0.01) : (profile?.pip_size_forex ?? 0.0001),
+            pointValueUsd: profile?.point_value_forex_usd ?? null
+        };
+    }
+    if (p.length === 6 && p.startsWith('USD')) {
+        return {
+            kind: 'usd_base',
+            contractSize: profile?.lot_size_forex ?? STANDARD_FX_LOT,
+            pipSize: p.endsWith('JPY') ? (profile?.pip_size_jpy_pairs ?? 0.01) : (profile?.pip_size_forex ?? 0.0001),
+            pointValueUsd: null
+        };
+    }
+    if (p.length === 6 && ISO_CCY.has(p.slice(0,3)) && ISO_CCY.has(p.slice(3,6))) {
+        return {
+            kind: 'cross_pair',
+            contractSize: profile?.lot_size_forex ?? STANDARD_FX_LOT,
+            quoteCcy: p.slice(3,6),
+            pipSize: p.endsWith('JPY') ? (profile?.pip_size_jpy_pairs ?? 0.01) : (profile?.pip_size_forex ?? 0.0001),
+            pointValueUsd: null
+        };
+    }
+    return { kind: 'needs_lookup' };
 }
 
 // Returns { pnl, aiSourced } — aiSourced flags whether this figure relied on a
@@ -1121,7 +1236,8 @@ function calcPnl(t, acct) {
     if (t.lot_size == null) return { pnl: 0, aiSourced: false, noLotSize: true };
     if (t.entry_price == null || t.close_price == null) return { pnl: 0, aiSourced: false };
     const dir = normalizeDirection(t.trade_type) === 'sell' ? -1 : 1;
-    const cls = classifySymbol(t.pair);
+    const profile = acct?.broker_profile_id ? brokerProfiles.find(p => p.id === acct.broker_profile_id) : null;
+    const spec = resolveContractSpec(t.pair, profile);
     const commissionPerLot = resolveCommission(t, acct);
     const commissionDeduct = commissionPerLot * Number(t.lot_size);
 
@@ -1129,35 +1245,43 @@ function calcPnl(t, acct) {
         return { pnl: rawPnl - commissionDeduct, aiSourced: false, ...extra };
     }
 
-    if (cls.kind === 'direct_usd') {
-        const pnl = (Number(t.close_price) - Number(t.entry_price)) * Number(t.lot_size) * cls.contractSize * dir;
+    if (spec.kind === 'direct_usd') {
+        // If profile provides a point value, use it directly (most accurate for metals/indices)
+        if (spec.pointValueUsd != null) {
+            const pipMove = (Number(t.close_price) - Number(t.entry_price)) / (spec.pipSize || 0.01);
+            return withComm(pipMove * Number(t.lot_size) * spec.pointValueUsd * dir);
+        }
+        const pnl = (Number(t.close_price) - Number(t.entry_price)) * Number(t.lot_size) * spec.contractSize * dir;
         return withComm(pnl);
     }
-    if (cls.kind === 'usd_base') {
-        let pnl = (Number(t.close_price) - Number(t.entry_price)) * Number(t.lot_size) * cls.contractSize * dir;
+    if (spec.kind === 'usd_base') {
+        let pnl = (Number(t.close_price) - Number(t.entry_price)) * Number(t.lot_size) * spec.contractSize * dir;
         pnl = pnl / Number(t.close_price);
         return withComm(pnl);
     }
-    if (cls.kind === 'cross_pair') {
-        const rate = fxRates[cls.quoteCcy];
-        if (!rate) return { pnl: 0, aiSourced: false, pending: true, pendingMsg: `Awaiting ${cls.quoteCcy}/USD rate — run Sync` };
-        const pnlInQuote = (Number(t.close_price) - Number(t.entry_price)) * Number(t.lot_size) * cls.contractSize * dir;
+    if (spec.kind === 'cross_pair') {
+        const rate = fxRates[spec.quoteCcy];
+        if (!rate) return { pnl: 0, aiSourced: false, pending: true, pendingMsg: `Awaiting ${spec.quoteCcy}/USD rate — run Sync` };
+        const pnlInQuote = (Number(t.close_price) - Number(t.entry_price)) * Number(t.lot_size) * spec.contractSize * dir;
         return withComm(pnlInQuote * rate);
     }
 
-    // needs_lookup: use cached asset_specs entry if we have one
-    const spec = assetSpecsCache[t.pair];
-    if (!spec) {
+    // needs_lookup: try asset_specs cache, then AI lookup
+    const assetSpec = assetSpecsCache[t.pair];
+    if (!assetSpec) {
         ensureAssetSpecLookup(t.pair);
         return { pnl: 0, aiSourced: true, pending: true };
     }
-    if (spec.point_value_usd != null) {
-        const pnl = (Number(t.close_price) - Number(t.entry_price)) * Number(t.lot_size) * Number(spec.point_value_usd) * dir;
+    // Use profile indices/commodities lot size + point value if available
+    const lotSize = profile?.lot_size_indices ?? profile?.lot_size_commodities ?? 1;
+    const pointVal = assetSpec.point_value_usd;
+    if (pointVal != null) {
+        const pnl = (Number(t.close_price) - Number(t.entry_price)) * Number(t.lot_size) * Number(pointVal) * dir;
         return { pnl: pnl - commissionDeduct, aiSourced: true };
     }
-    if (spec.contract_size != null) {
-        let pnl = (Number(t.close_price) - Number(t.entry_price)) * Number(t.lot_size) * Number(spec.contract_size) * dir;
-        if (spec.quote_currency && spec.quote_currency !== 'USD') pnl = pnl / Number(t.close_price);
+    if (assetSpec.contract_size != null) {
+        let pnl = (Number(t.close_price) - Number(t.entry_price)) * Number(t.lot_size) * Number(assetSpec.contract_size) * dir;
+        if (assetSpec.quote_currency && assetSpec.quote_currency !== 'USD') pnl = pnl / Number(t.close_price);
         return { pnl: pnl - commissionDeduct, aiSourced: true };
     }
     return { pnl: 0, aiSourced: true };
@@ -1246,7 +1370,7 @@ function buildCalDayMap(tradeResults) {
         const key = calDateKey(new Date(t.close_time));
         if (!map[key]) map[key] = { totalPnl: 0, totalPips: 0, totalR: 0, rCount: 0, tradeCount: 0, wins: 0 };
         map[key].totalPnl += result.pnl;
-        const pips = calcPips(t);
+        const pips = calcPips(t, acct);
         if (pips !== null) map[key].totalPips += pips;
         const r = calcR(t);
         if (r !== null) { map[key].totalR += r; map[key].rCount++; }
@@ -1773,32 +1897,49 @@ function renderProfilesList() {
         const linkedAccts = accounts.filter(a => a.broker_profile_id === p.id).map(a => a.name);
         const linkedTxt = linkedAccts.length ? linkedAccts.join(', ') : 'No accounts linked';
         const typeLabel = p.profile_type === 'prop' ? 'Prop Firm' : 'Broker';
-        let fieldsHtml = '';
-        if (p.profile_type === 'prop') {
-            fieldsHtml = `
-                <div class="pc-fields">
-                    <div class="pc-field"><label>Commission / Lot</label><input id="pf_commLot_${p.id}" type="number" step="0.01" value="${p.commission_per_lot??''}"></div>
-                    <div class="pc-field"><label>Daily Reset (UTC hr)</label><input id="pf_reset_${p.id}" type="number" min="0" max="23" value="${p.daily_reset_utc_hour??22}"></div>
-                    <div class="pc-field"><label>Profit Target %</label><input id="pf_target_${p.id}" type="number" step="0.1" value="${p.profit_target_pct??''}"></div>
-                    <div class="pc-field"><label>Drawdown %</label><input id="pf_dd_${p.id}" type="number" step="0.1" value="${p.drawdown_pct??''}"></div>
-                    <div class="pc-field"><label>Daily Loss Limit %</label><input id="pf_daily_${p.id}" type="number" step="0.1" value="${p.daily_loss_limit_pct??''}"></div>
-                    <div class="pc-field"><label>Drawdown Type</label>
-                        <select id="pf_ddtype_${p.id}">
-                            <option value="static" ${p.drawdown_type==='static'?'selected':''}>Static</option>
-                            <option value="trailing" ${p.drawdown_type==='trailing'?'selected':''}>Trailing</option>
-                            <option value="trailing_to_be" ${p.drawdown_type==='trailing_to_be'?'selected':''}>Trailing to BE</option>
-                        </select>
-                    </div>
-                </div>`;
-        } else {
-            fieldsHtml = `
-                <div style="font-size:10px;color:var(--muted);margin-bottom:6px;">Commission per lot (USD) by instrument class</div>
-                <div class="pc-fields" style="grid-template-columns:1fr 1fr 1fr;">
-                    <div class="pc-field"><label>Forex</label><input id="pf_commFx_${p.id}" type="number" step="0.01" value="${p.commission_forex??''}"></div>
-                    <div class="pc-field"><label>Indices</label><input id="pf_commIdx_${p.id}" type="number" step="0.01" value="${p.commission_indices??''}"></div>
-                    <div class="pc-field"><label>Commodities</label><input id="pf_commCom_${p.id}" type="number" step="0.01" value="${p.commission_commodities??''}"></div>
-                </div>`;
-        }
+
+        const propHtml = p.profile_type === 'prop' ? `
+            <div class="pc-fields" style="grid-template-columns:repeat(3,1fr)">
+                <div class="pc-field"><label>Profit Target %</label><input id="pf_target_${p.id}" type="number" step="0.1" value="${p.profit_target_pct??''}"></div>
+                <div class="pc-field"><label>Drawdown %</label><input id="pf_dd_${p.id}" type="number" step="0.1" value="${p.drawdown_pct??''}"></div>
+                <div class="pc-field"><label>Daily Loss Limit %</label><input id="pf_daily_${p.id}" type="number" step="0.1" value="${p.daily_loss_limit_pct??''}"></div>
+                <div class="pc-field"><label>Drawdown Type</label>
+                    <select id="pf_ddtype_${p.id}">
+                        <option value="static" ${p.drawdown_type==='static'?'selected':''}>Static</option>
+                        <option value="trailing" ${p.drawdown_type==='trailing'?'selected':''}>Trailing</option>
+                        <option value="trailing_to_be" ${p.drawdown_type==='trailing_to_be'?'selected':''}>Trailing to BE</option>
+                    </select>
+                </div>
+                <div class="pc-field"><label>Daily Reset UTC Hr</label><input id="pf_reset_${p.id}" type="number" min="0" max="23" value="${p.daily_reset_utc_hour??22}"></div>
+            </div>` : '';
+
+        const classHtml = (label, commId, commVal, extras) => `
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:8px 0 4px;">${label}</div>
+            <div class="pc-fields" style="grid-template-columns:repeat(3,1fr)">
+                <div class="pc-field"><label>Comm/Lot (USD)</label><input id="${commId}" type="number" step="0.01" value="${commVal??''}"></div>
+                ${extras}
+            </div>`;
+
+        const fxHtml = classHtml('Forex', `pf_commFx_${p.id}`, p.commission_forex,
+            `<div class="pc-field"><label>Lot Size</label><input id="pf_lotFx_${p.id}" type="number" value="${p.lot_size_forex??100000}"></div>
+             <div class="pc-field"><label>Pip Size</label><input id="pf_pipFx_${p.id}" type="number" step="0.00001" value="${p.pip_size_forex??0.0001}"></div>
+             <div class="pc-field"><label>Point Val USD/Lot</label><input id="pf_pvFx_${p.id}" type="number" step="0.01" value="${p.point_value_forex_usd??''}"></div>`);
+
+        const metalHtml = classHtml('Metals', `pf_commMetal_${p.id}`, p.commission_metals,
+            `<div class="pc-field"><label>XAU Lot (oz)</label><input id="pf_lotXau_${p.id}" type="number" value="${p.lot_size_xau??100}"></div>
+             <div class="pc-field"><label>XAG Lot (oz)</label><input id="pf_lotXag_${p.id}" type="number" value="${p.lot_size_xag??5000}"></div>
+             <div class="pc-field"><label>XAU Pip Size</label><input id="pf_pipXau_${p.id}" type="number" step="0.001" value="${p.pip_size_xau??0.01}"></div>
+             <div class="pc-field"><label>XAU Pt Val USD/Lot</label><input id="pf_pvXau_${p.id}" type="number" step="0.01" value="${p.point_value_metals_xau_usd??''}"></div>
+             <div class="pc-field"><label>XAG Pt Val USD/Lot</label><input id="pf_pvXag_${p.id}" type="number" step="0.01" value="${p.point_value_metals_xag_usd??''}"></div>`);
+
+        const idxHtml = classHtml('Indices', `pf_commIdx_${p.id}`, p.commission_indices,
+            `<div class="pc-field"><label>Lot Size</label><input id="pf_lotIdx_${p.id}" type="number" value="${p.lot_size_indices??1}"></div>
+             <div class="pc-field"><label>Point Val USD/Lot</label><input id="pf_pvIdx_${p.id}" type="number" step="0.01" value="${p.point_value_indices_usd??''}"></div>`);
+
+        const comHtml = classHtml('Commodities', `pf_commCom_${p.id}`, p.commission_commodities,
+            `<div class="pc-field"><label>Lot Size</label><input id="pf_lotCom_${p.id}" type="number" value="${p.lot_size_commodities??1}"></div>
+             <div class="pc-field"><label>Point Val USD/Lot</label><input id="pf_pvCom_${p.id}" type="number" step="0.01" value="${p.point_value_commodities_usd??''}"></div>`);
+
         return `<div class="profile-card">
             <div class="pc-head">
                 <div>
@@ -1810,7 +1951,8 @@ function renderProfilesList() {
                     <button class="btn ghost" style="padding:5px 10px;font-size:11px;color:var(--neg);" onclick="deleteProfile('${p.id}')">✕</button>
                 </div>
             </div>
-            ${fieldsHtml}
+            ${propHtml}
+            ${fxHtml}${metalHtml}${idxHtml}${comHtml}
             <div class="pc-linked">Linked: ${linkedTxt}</div>
         </div>`;
     }).join('');
@@ -1819,23 +1961,43 @@ function renderProfilesList() {
 async function saveProfileEdit(profileId) {
     const p = brokerProfiles.find(x => x.id === profileId);
     if (!p) return;
-    let payload = { profile_name: p.profile_name };
-    if (p.profile_type === 'prop') {
-        payload.commission_per_lot = parseFloat(document.getElementById(`pf_commLot_${profileId}`)?.value) || 0;
-        payload.daily_reset_utc_hour = parseInt(document.getElementById(`pf_reset_${profileId}`)?.value) ?? 22;
-        payload.profit_target_pct = parseFloat(document.getElementById(`pf_target_${profileId}`)?.value) || null;
-        payload.drawdown_pct = parseFloat(document.getElementById(`pf_dd_${profileId}`)?.value) || null;
-        payload.daily_loss_limit_pct = parseFloat(document.getElementById(`pf_daily_${profileId}`)?.value) || null;
-        payload.drawdown_type = document.getElementById(`pf_ddtype_${profileId}`)?.value || 'static';
-    } else {
-        payload.commission_forex = parseFloat(document.getElementById(`pf_commFx_${profileId}`)?.value) || null;
-        payload.commission_indices = parseFloat(document.getElementById(`pf_commIdx_${profileId}`)?.value) || null;
-        payload.commission_commodities = parseFloat(document.getElementById(`pf_commCom_${profileId}`)?.value) || null;
-    }
+    const g = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+    const pf = (id) => parseFloat(g(id)) || null;
+    const pi = (id) => parseInt(g(id));
+
+    const payload = {
+        profile_name: p.profile_name,
+        // Prop rules
+        profit_target_pct:    pf(`pf_target_${profileId}`),
+        drawdown_pct:         pf(`pf_dd_${profileId}`),
+        daily_loss_limit_pct: pf(`pf_daily_${profileId}`),
+        daily_reset_utc_hour: pi(`pf_reset_${profileId}`) ?? 22,
+        drawdown_type:        g(`pf_ddtype_${profileId}`) || 'static',
+        // Forex
+        commission_forex:        pf(`pf_commFx_${profileId}`),
+        lot_size_forex:          pf(`pf_lotFx_${profileId}`) ?? 100000,
+        pip_size_forex:          pf(`pf_pipFx_${profileId}`) ?? 0.0001,
+        point_value_forex_usd:   pf(`pf_pvFx_${profileId}`),
+        // Metals
+        commission_metals:           pf(`pf_commMetal_${profileId}`),
+        lot_size_xau:                pf(`pf_lotXau_${profileId}`) ?? 100,
+        lot_size_xag:                pf(`pf_lotXag_${profileId}`) ?? 5000,
+        pip_size_xau:                pf(`pf_pipXau_${profileId}`) ?? 0.01,
+        point_value_metals_xau_usd:  pf(`pf_pvXau_${profileId}`),
+        point_value_metals_xag_usd:  pf(`pf_pvXag_${profileId}`),
+        // Indices
+        commission_indices:      pf(`pf_commIdx_${profileId}`),
+        lot_size_indices:        pf(`pf_lotIdx_${profileId}`) ?? 1,
+        point_value_indices_usd: pf(`pf_pvIdx_${profileId}`),
+        // Commodities
+        commission_commodities:      pf(`pf_commCom_${profileId}`),
+        lot_size_commodities:        pf(`pf_lotCom_${profileId}`) ?? 1,
+        point_value_commodities_usd: pf(`pf_pvCom_${profileId}`),
+    };
     const { error } = await sb.from('broker_profiles').update(payload).eq('id', profileId);
     if (error) { alert('Save failed: ' + error.message); return; }
     Object.assign(p, payload);
-    renderActiveAccount(); // recalculate PnL with new profile values
+    renderActiveAccount();
     renderProfilesList();
     alert('Profile saved.');
 }
@@ -1858,44 +2020,182 @@ function openNewProfileModal(type) {
     _editingProfileId = null;
     _editingProfileType = type;
     document.getElementById('profileModalTitle').textContent = type === 'prop' ? 'New Prop Firm Profile' : 'New Broker Profile';
-    document.getElementById('profileModalSub').textContent = type === 'prop' ? 'Rules & commission for a prop firm' : 'Commission rates by instrument class';
-    document.getElementById('pmName').value = '';
-    document.getElementById('pmCommLot').value = '';
-    document.getElementById('pmReset').value = '22';
-    document.getElementById('pmTarget').value = '';
-    document.getElementById('pmDD').value = '';
-    document.getElementById('pmDaily').value = '';
+    document.getElementById('profileModalSub').textContent = type === 'prop'
+        ? 'Enter firm name, fetch AI-suggested rules, review and confirm'
+        : 'Enter broker name, fetch AI-suggested specs, review and confirm';
+    // Reset all fields
+    ['pmName','pmFirmName','pmTarget','pmDD','pmDaily','pmReset',
+     'pmCommFx','pmLotFx','pmPipFx','pmPvFx',
+     'pmCommMetal','pmLotXau','pmLotXag','pmPipXau','pmPvXau','pmPvXag',
+     'pmCommIdx','pmLotIdx','pmPvIdx',
+     'pmCommCom','pmLotCom','pmPvCom'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
     document.getElementById('pmDDType').value = 'static';
-    document.getElementById('pmCommFx').value = '';
-    document.getElementById('pmCommIdx').value = '';
-    document.getElementById('pmCommCom').value = '';
-    document.getElementById('pmPropFields').style.display = type === 'prop' ? 'block' : 'none';
-    document.getElementById('pmBrokerFields').style.display = type === 'broker' ? 'block' : 'none';
+    document.getElementById('pmSpreadFx').value = '';
+    document.getElementById('pmReset').value = '22';
+    document.getElementById('pmFetchMsg').textContent = '';
+    document.getElementById('pmFetchMsg').className = '';
+    document.getElementById('pmStep2').style.display = 'none';
+    document.getElementById('pmSaveBtn').style.display = 'none';
+    document.getElementById('pmPropRules').style.display = type === 'prop' ? 'block' : 'none';
+    document.getElementById('pmAiNotes').textContent = '';
+    // Clear confidence badges
+    ['pmFxConf','pmMetalConf','pmIdxConf','pmComConf'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '';
+    });
     document.getElementById('profileModalScrim').classList.add('open');
 }
 
 function closeProfileModal() { document.getElementById('profileModalScrim').classList.remove('open'); }
 
+// Fetches full per-class profile data from Gemini via the Worker
+async function fetchProfileRules() {
+    const firmName = document.getElementById('pmFirmName').value.trim();
+    if (!firmName) { 
+        const msg = document.getElementById('pmFetchMsg');
+        msg.textContent = 'Enter a firm or broker name first.';
+        msg.className = 'msg err';
+        return;
+    }
+    const msg = document.getElementById('pmFetchMsg');
+    msg.textContent = 'Fetching from AI…';
+    msg.className = 'msg';
+
+    try {
+        const res = await fetch(GEMINI_WORKER_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                mode: 'profile_rules',
+                firmName,
+                accountType: '',
+                brokerContext: _editingProfileType  // 'prop' or 'broker'
+            })
+        });
+        const json = await res.json();
+        if (json.error) { msg.textContent = json.error; msg.className = 'msg err'; return; }
+
+        // ── Populate Prop rules ──
+        if (_editingProfileType === 'prop' && json.prop_rules) {
+            const r = json.prop_rules;
+            document.getElementById('pmTarget').value = r.profit_target_pct ?? '';
+            document.getElementById('pmDD').value = r.drawdown_pct ?? '';
+            document.getElementById('pmDaily').value = r.daily_loss_limit_pct ?? '';
+            document.getElementById('pmReset').value = r.daily_reset_utc_hour ?? 22;
+            if (r.drawdown_type) document.getElementById('pmDDType').value = r.drawdown_type;
+        }
+
+        // ── Populate asset classes ──
+        const ac = json.asset_classes || {};
+
+        function confBadge(notes, confidence) {
+            if (!confidence) return '';
+            const c = confidence === 'high' ? 'var(--pos)' : 'var(--neg)';
+            return `<span style="color:${c};font-size:9px;">(${confidence} confidence${notes ? ' · ' + notes : ''})</span>`;
+        }
+
+        if (ac.forex) {
+            const f = ac.forex;
+            document.getElementById('pmCommFx').value  = f.commission_per_lot ?? '';
+            document.getElementById('pmLotFx').value   = f.lot_size ?? 100000;
+            document.getElementById('pmPipFx').value   = f.pip_size ?? 0.0001;
+            document.getElementById('pmPvFx').value    = f.point_value_usd ?? '';
+            if (f.spread_type) document.getElementById('pmSpreadFx').value = f.spread_type;
+            const el = document.getElementById('pmFxConf');
+            if (el) el.innerHTML = confBadge(f.notes, json.source_confidence);
+        }
+
+        if (ac.metals) {
+            const m = ac.metals;
+            document.getElementById('pmCommMetal').value = m.commission_per_lot ?? '';
+            document.getElementById('pmLotXau').value    = m.lot_size_xau ?? 100;
+            document.getElementById('pmLotXag').value    = m.lot_size_xag ?? 5000;
+            document.getElementById('pmPipXau').value    = m.pip_size_xau ?? 0.01;
+            document.getElementById('pmPvXau').value     = m.point_value_xau_usd ?? '';
+            document.getElementById('pmPvXag').value     = m.point_value_xag_usd ?? '';
+            const el = document.getElementById('pmMetalConf');
+            if (el) el.innerHTML = confBadge(m.notes, json.source_confidence);
+        }
+
+        if (ac.indices) {
+            const i = ac.indices;
+            document.getElementById('pmCommIdx').value = i.commission_per_lot ?? '';
+            document.getElementById('pmLotIdx').value  = i.lot_size ?? 1;
+            document.getElementById('pmPvIdx').value   = i.point_value_usd ?? '';
+            const el = document.getElementById('pmIdxConf');
+            if (el) el.innerHTML = confBadge(i.notes, json.source_confidence);
+        }
+
+        if (ac.commodities) {
+            const c = ac.commodities;
+            document.getElementById('pmCommCom').value = c.commission_per_lot ?? '';
+            document.getElementById('pmLotCom').value  = c.lot_size ?? 1;
+            document.getElementById('pmPvCom').value   = c.point_value_usd ?? '';
+            const el = document.getElementById('pmComConf');
+            if (el) el.innerHTML = confBadge(c.notes, json.source_confidence);
+        }
+
+        // Overall notes
+        const notesEl = document.getElementById('pmAiNotes');
+        if (notesEl && json.notes) notesEl.textContent = '📌 ' + json.notes;
+
+        // Show review section
+        document.getElementById('pmStep2').style.display = 'block';
+        document.getElementById('pmSaveBtn').style.display = 'block';
+        msg.textContent = json.source_confidence === 'low'
+            ? 'Low confidence — please fill in blanks manually before saving.'
+            : 'Fetched — review all values against your firm/broker before saving.';
+        msg.className = 'msg ok';
+
+    } catch (e) {
+        msg.textContent = 'Request failed: ' + e.message;
+        msg.className = 'msg err';
+    }
+}
+
+// Build full payload from all asset-class fields
+function _buildProfilePayload() {
+    const payload = {
+        user_id: currentUser.id,
+        profile_name: document.getElementById('pmName').value.trim(),
+        profile_type: _editingProfileType,
+        // Prop rules
+        profit_target_pct:    parseFloat(document.getElementById('pmTarget')?.value) || null,
+        drawdown_pct:         parseFloat(document.getElementById('pmDD')?.value) || null,
+        daily_loss_limit_pct: parseFloat(document.getElementById('pmDaily')?.value) || null,
+        daily_reset_utc_hour: parseInt(document.getElementById('pmReset')?.value) ?? 22,
+        drawdown_type:        document.getElementById('pmDDType')?.value || 'static',
+        // Forex
+        commission_forex:   parseFloat(document.getElementById('pmCommFx')?.value) || null,
+        lot_size_forex:     parseFloat(document.getElementById('pmLotFx')?.value) || 100000,
+        pip_size_forex:     parseFloat(document.getElementById('pmPipFx')?.value) || 0.0001,
+        point_value_forex_usd: parseFloat(document.getElementById('pmPvFx')?.value) || null,
+        // Metals
+        commission_metals:      parseFloat(document.getElementById('pmCommMetal')?.value) || null,
+        lot_size_xau:           parseFloat(document.getElementById('pmLotXau')?.value) || 100,
+        lot_size_xag:           parseFloat(document.getElementById('pmLotXag')?.value) || 5000,
+        pip_size_xau:           parseFloat(document.getElementById('pmPipXau')?.value) || 0.01,
+        point_value_metals_xau_usd: parseFloat(document.getElementById('pmPvXau')?.value) || null,
+        point_value_metals_xag_usd: parseFloat(document.getElementById('pmPvXag')?.value) || null,
+        // Indices
+        commission_indices:     parseFloat(document.getElementById('pmCommIdx')?.value) || null,
+        lot_size_indices:       parseFloat(document.getElementById('pmLotIdx')?.value) || 1,
+        point_value_indices_usd: parseFloat(document.getElementById('pmPvIdx')?.value) || null,
+        // Commodities
+        commission_commodities:     parseFloat(document.getElementById('pmCommCom')?.value) || null,
+        lot_size_commodities:       parseFloat(document.getElementById('pmLotCom')?.value) || 1,
+        point_value_commodities_usd: parseFloat(document.getElementById('pmPvCom')?.value) || null,
+    };
+    return payload;
+}
+
 async function saveProfile() {
     const name = document.getElementById('pmName').value.trim();
     if (!name) { alert('Profile name is required.'); return; }
-    const payload = {
-        user_id: currentUser.id,
-        profile_name: name,
-        profile_type: _editingProfileType
-    };
-    if (_editingProfileType === 'prop') {
-        payload.commission_per_lot = parseFloat(document.getElementById('pmCommLot').value) || 0;
-        payload.daily_reset_utc_hour = parseInt(document.getElementById('pmReset').value) ?? 22;
-        payload.profit_target_pct = parseFloat(document.getElementById('pmTarget').value) || null;
-        payload.drawdown_pct = parseFloat(document.getElementById('pmDD').value) || null;
-        payload.daily_loss_limit_pct = parseFloat(document.getElementById('pmDaily').value) || null;
-        payload.drawdown_type = document.getElementById('pmDDType').value;
-    } else {
-        payload.commission_forex = parseFloat(document.getElementById('pmCommFx').value) || null;
-        payload.commission_indices = parseFloat(document.getElementById('pmCommIdx').value) || null;
-        payload.commission_commodities = parseFloat(document.getElementById('pmCommCom').value) || null;
-    }
+    const payload = _buildProfilePayload();
     const { data, error } = await sb.from('broker_profiles').insert(payload).select().single();
     if (error) { alert('Save failed: ' + error.message); return; }
     brokerProfiles.push(data);
@@ -1903,6 +2203,7 @@ async function saveProfile() {
     renderProfilesList();
     renderAcctProfileLinks();
 }
+
 
 // ── Account→Profile links ──
 function renderAcctProfileLinks() {
