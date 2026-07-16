@@ -413,7 +413,7 @@
 <div class="modal-scrim" id="addAccountScrim">
     <div class="modal">
         <h3>Add Account</h3>
-        <div class="sub">Step 1 of 2 — basic setup</div>
+        <div class="sub">Link to an existing profile for P&amp;L tracking</div>
 
         <div class="kind-toggle">
             <button id="paperLiveBtn" class="sel" onclick="setAccountPaper(false)">Live</button>
@@ -425,45 +425,52 @@
             <button id="kindPersonalBtn" onclick="setAccountKind('personal')">Personal</button>
         </div>
 
-        <div class="field"><label>Account Name</label><input id="fName" placeholder="e.g. FTMO Phase 2"></div>
+        <div class="field"><label>Account Name</label>
+            <input id="fName" placeholder="e.g. FTMO Phase 2 — July 2026">
+        </div>
 
         <div id="propFields">
-            <div class="field"><label>Firm Name</label><input id="fFirm" placeholder="e.g. FTMO"></div>
-            <div class="field"><label>Account Type</label><input id="fAcctType" placeholder="e.g. Phase 1, Phase 2, Funded"></div>
+            <div class="field"><label>Firm Name <span style="font-size:10px;color:var(--muted);font-weight:400;">(informational)</span></label>
+                <input id="fFirm" placeholder="e.g. FTMO">
+            </div>
+            <div class="field"><label>Account Type <span style="font-size:10px;color:var(--muted);font-weight:400;">(informational)</span></label>
+                <input id="fAcctType" placeholder="e.g. Phase 1, Phase 2, Funded">
+            </div>
         </div>
 
         <div id="personalFields" style="display:none;">
-            <div class="field">
-                <label>Broker</label>
-                <select id="fBroker" onchange="onBrokerChange()">
-                    <option value="IC Markets">IC Markets</option>
-                    <option value="Exness">Exness</option>
-                    <option value="Other">Other</option>
-                </select>
+            <div class="field"><label>Broker <span style="font-size:10px;color:var(--muted);font-weight:400;">(informational)</span></label>
+                <input id="fBrokerName" placeholder="e.g. IC Markets, Exness">
             </div>
         </div>
 
-        <div class="field"><label>Starting Balance (USD)</label><input id="fStartBal" type="number" placeholder="100000"></div>
+        <!-- Profile selector — required -->
+        <div class="field">
+            <label>Profile <span style="font-size:10px;color:var(--neg);font-weight:600;">Required</span></label>
+            <select id="fProfile">
+                <option value="">— Select a profile —</option>
+            </select>
+            <div id="fProfileMsg" style="font-size:11px;margin-top:5px;"></div>
+        </div>
 
-        <button class="btn primary" style="width:100%;" id="fetchRulesBtn" onclick="fetchRulesFromWorker()">Fetch Rules</button>
-        <div class="msg" id="fetchMsg"></div>
+        <!-- Starting balance — always shown -->
+        <div class="field">
+            <label>Starting Balance (USD)</label>
+            <input id="fStartBal" type="number" placeholder="100000">
+        </div>
 
-        <div id="reviewSection" style="display:none;margin-top:18px;">
-            <div class="review-banner">AI-suggested values below — please verify against your firm/broker's own dashboard before saving. Nothing is saved until you confirm.</div>
-            <div class="field"><label>Profit Target % <span class="ai-tag" id="tagTarget">AI</span></label><input id="rTarget" type="number" step="0.1"></div>
-            <div class="field">
-                <label>Drawdown Type <span class="ai-tag" id="tagDDType">AI</span></label>
-                <select id="rDDType"><option value="static">Static</option><option value="trailing">Trailing</option><option value="trailing_to_be">Trailing to breakeven</option></select>
+        <!-- Current balance — prop only, for mid-evaluation entry -->
+        <div class="field" id="fCurrBalField" style="display:none;">
+            <label>Current Balance (USD) <span style="font-size:10px;color:var(--muted);font-weight:400;">optional — leave blank if starting fresh</span></label>
+            <input id="fCurrBal" type="number" placeholder="Same as starting if starting fresh">
+            <div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.5;">
+                Fill this if you started using the app mid-evaluation. The equity curve will show a drop from Starting → Current, then continue with your synced trades.
             </div>
-            <div class="field"><label>Drawdown % <span class="ai-tag" id="tagDD">AI</span></label><input id="rDD" type="number" step="0.1"></div>
-            <div class="field"><label>Daily Loss Limit % <span class="ai-tag" id="tagDaily">AI</span></label><input id="rDaily" type="number" step="0.1"></div>
-            <div class="field"><label>Commission per Lot (USD) <span class="ai-tag" id="tagComm">AI</span></label><input id="rComm" type="number" step="0.01"></div>
-            <div class="field" id="resetTimeField"><label>Daily Reset (UTC hour 0-23) <span class="ai-tag" id="tagReset">AI</span></label><input id="rReset" type="number" min="0" max="23" step="1" placeholder="22 = 5pm New York EST"></div>
         </div>
 
         <div class="modal-actions">
             <button class="btn ghost" onclick="closeAddAccountModal()">Cancel</button>
-            <button class="btn primary" id="confirmSaveBtn" style="display:none;" onclick="confirmSaveAccount()">Confirm &amp; Save</button>
+            <button class="btn primary" id="confirmSaveBtn" onclick="confirmSaveAccount()">Save Account</button>
         </div>
     </div>
 </div>
@@ -1018,8 +1025,13 @@ async function renderActiveAccount() {
     if (bannerEl) bannerEl.innerHTML = banner;
 
     // ── Balance card ──
-    const balance = Number(acct.starting_balance) + netPnl;
-    const netChange = balance - Number(acct.starting_balance);
+    // If current_balance_override is set (mid-evaluation entry), P&L from trades
+    // is calculated on top of that override. starting_balance is always the drawdown reference.
+    const tradeBase = acct.current_balance_override != null
+        ? Number(acct.current_balance_override)
+        : Number(acct.starting_balance);
+    const balance = tradeBase + netPnl;
+    const netChange = balance - Number(acct.starting_balance); // always vs starting_balance
     document.getElementById('balFigure').textContent = '$' + balance.toFixed(2);
     document.getElementById('balFigure').className = 'figure ' + (netChange >= 0 ? 'pos' : 'neg');
     document.getElementById('balStart').textContent = '$' + Number(acct.starting_balance).toFixed(2);
@@ -1071,7 +1083,7 @@ async function renderActiveAccount() {
 
     // ── Equity curve + Calendar ──
     _calTradeResults = tradeResults;
-    renderEquityCurve(tradeResults, Number(acct.starting_balance));
+    renderEquityCurve(tradeResults, Number(acct.starting_balance), acct.current_balance_override != null ? Number(acct.current_balance_override) : null);
     renderCalendar();
 }
 
@@ -1524,59 +1536,122 @@ function renderCalendar() {
 
 // ── EQUITY CURVE ──
 let _equityChart = null;
-function renderEquityCurve(tradeResults, startBalance) {
+function renderEquityCurve(tradeResults, startBalance, currentBalOverride) {
     const canvas = document.getElementById('equityCanvas');
     if (!canvas || typeof Chart === 'undefined') return;
 
-    // Resolve CSS variables at render time so they work in both light and dark mode
     const style = getComputedStyle(document.body);
     const mutedColor = style.getPropertyValue('--muted').trim() || '#888';
     const borderColor = style.getPropertyValue('--border').trim() || '#ddd';
+    const posColor = style.getPropertyValue('--pos').trim() || '#1E9E5A';
+    const negColor = style.getPropertyValue('--neg').trim() || '#E0475A';
 
-    const points = [{ x: 'Start', y: startBalance }];
-    let running = startBalance;
+    // Build real trade data points
+    const realPoints = [];
+    let running = currentBalOverride != null ? currentBalOverride : startBalance;
     tradeResults.forEach(({ t, result }) => {
         if (result.noLotSize || result.pending || !t.close_time) return;
         running += result.pnl;
         const label = new Date(t.close_time).toLocaleDateString(undefined, { month:'short', day:'numeric' });
-        points.push({ x: label, y: parseFloat(running.toFixed(2)) });
+        realPoints.push({ x: label, y: parseFloat(running.toFixed(2)) });
     });
 
-    const labels = points.map(p => p.x);
-    const data = points.map(p => p.y);
-    const isUp = data[data.length - 1] >= startBalance;
-    const lineColor = isUp
-        ? (style.getPropertyValue('--pos').trim() || '#1E9E5A')
-        : (style.getPropertyValue('--neg').trim() || '#E0475A');
+    const finalBalance = realPoints.length ? realPoints[realPoints.length-1].y : (currentBalOverride ?? startBalance);
+    const lineColor = finalBalance >= startBalance ? posColor : negColor;
 
     if (_equityChart) { _equityChart.destroy(); _equityChart = null; }
+
+    const datasets = [];
+
+    // Segment 1: dashed pre-history (only when current_balance_override is set)
+    if (currentBalOverride != null) {
+        datasets.push({
+            label: 'Pre-app history',
+            data: [startBalance, currentBalOverride],
+            labels: ['Start', 'App start'],
+            borderColor: mutedColor,
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            borderDash: [6, 4],
+            pointRadius: 4,
+            fill: false,
+            tension: 0
+        });
+    }
+
+    // Segment 2: real trades
+    const realLabels = [(currentBalOverride != null ? 'App start' : 'Start'), ...realPoints.map(p => p.x)];
+    const realData = [(currentBalOverride != null ? currentBalOverride : startBalance), ...realPoints.map(p => p.y)];
+    datasets.push({
+        label: 'Synced trades',
+        data: realData,
+        borderColor: lineColor,
+        backgroundColor: lineColor + '22',
+        borderWidth: 2,
+        pointRadius: realData.length > 30 ? 0 : 3,
+        fill: true,
+        tension: 0.3
+    });
+
+    // Combine labels: pre-history uses index-based x, real uses date labels
+    // Use Chart.js with separate datasets each having their own labels via x/y point format
     _equityChart = new Chart(canvas, {
         type: 'line',
         data: {
-            labels,
-            datasets: [{
-                data,
-                borderColor: lineColor,
-                backgroundColor: lineColor + '22',
-                borderWidth: 2,
-                pointRadius: data.length > 30 ? 0 : 3,
-                fill: true,
-                tension: 0.3
-            }]
+            labels: currentBalOverride != null
+                ? ['Start', 'App start', ...realPoints.map(p => p.x)]
+                : ['Start', ...realPoints.map(p => p.x)],
+            datasets: currentBalOverride != null ? [
+                {
+                    label: 'Pre-app history',
+                    data: [startBalance, currentBalOverride, ...realPoints.map(() => null)],
+                    borderColor: mutedColor,
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [6, 4],
+                    pointRadius: 3,
+                    fill: false,
+                    tension: 0,
+                    spanGaps: false
+                },
+                {
+                    label: 'Synced trades',
+                    data: [null, currentBalOverride, ...realPoints.map(p => p.y)],
+                    borderColor: lineColor,
+                    backgroundColor: lineColor + '22',
+                    borderWidth: 2,
+                    pointRadius: realPoints.length > 30 ? 0 : 3,
+                    fill: true,
+                    tension: 0.3,
+                    spanGaps: false
+                }
+            ] : [
+                {
+                    label: 'Synced trades',
+                    data: [startBalance, ...realPoints.map(p => p.y)],
+                    borderColor: lineColor,
+                    backgroundColor: lineColor + '22',
+                    borderWidth: 2,
+                    pointRadius: realPoints.length > 30 ? 0 : 3,
+                    fill: true,
+                    tension: 0.3
+                }
+            ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                x: {
-                    ticks: { maxTicksLimit: 8, color: mutedColor, font: { size: 10 } },
-                    grid: { display: false }
-                },
-                y: {
-                    ticks: { color: mutedColor, font: { size: 10 }, callback: v => '$' + v.toLocaleString() },
-                    grid: { color: borderColor }
+            plugins: {
+                legend: { display: currentBalOverride != null },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => ' $' + Number(ctx.raw).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    }
                 }
+            },
+            scales: {
+                x: { ticks: { maxTicksLimit: 8, color: mutedColor, font: { size: 10 } }, grid: { display: false } },
+                y: { ticks: { color: mutedColor, font: { size: 10 }, callback: v => '$' + v.toLocaleString() }, grid: { color: borderColor } }
             }
         }
     });
@@ -1682,11 +1757,13 @@ function openAddAccountModal() {
 function closeAddAccountModal() { document.getElementById('addAccountScrim').classList.remove('open'); }
 
 function resetAddAccountForm() {
-    ['fName','fFirm','fAcctType','fStartBal','rTarget','rDD','rDaily','rComm','rReset'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('reviewSection').style.display = 'none';
-    document.getElementById('confirmSaveBtn').style.display = 'none';
-    document.getElementById('fetchMsg').textContent = '';
-    lastFetchedRules = null;
+    ['fName','fFirm','fAcctType','fBrokerName','fStartBal','fCurrBal'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    document.getElementById('fProfileMsg').textContent = '';
+    const saveBtn = document.getElementById('confirmSaveBtn');
+    if (saveBtn) { saveBtn.textContent = 'Save Account'; saveBtn.disabled = false; }
     setAccountKind('prop');
     setAccountPaper(false);
 }
@@ -1695,87 +1772,64 @@ function setAccountPaper(isPaper) {
     addAccountPaper = isPaper;
     document.getElementById('paperLiveBtn').classList.toggle('sel', !isPaper);
     document.getElementById('paperPaperBtn').classList.toggle('sel', isPaper);
+    populateFProfileDropdown();
 }
 
 function setAccountKind(kind) {
     addAccountKind = kind;
-    document.getElementById('kindPropBtn').classList.toggle('sel', kind==='prop');
-    document.getElementById('kindPersonalBtn').classList.toggle('sel', kind==='personal');
-    document.getElementById('propFields').style.display = kind==='prop' ? 'block' : 'none';
-    document.getElementById('personalFields').style.display = kind==='personal' ? 'block' : 'none';
-    document.getElementById('fetchRulesBtn').textContent = kind === 'prop' ? 'Fetch Rules' : 'Fetch Commission Info';
+    document.getElementById('kindPropBtn').classList.toggle('sel', kind === 'prop');
+    document.getElementById('kindPersonalBtn').classList.toggle('sel', kind === 'personal');
+    document.getElementById('propFields').style.display = kind === 'prop' ? 'block' : 'none';
+    document.getElementById('personalFields').style.display = kind === 'personal' ? 'block' : 'none';
+    // Current balance field only shown for prop accounts (mid-evaluation entry)
+    document.getElementById('fCurrBalField').style.display = kind === 'prop' ? 'block' : 'none';
+    populateFProfileDropdown();
 }
 
-function onBrokerChange() { /* placeholder for future broker-specific UI tweaks */ }
+// Populate profile dropdown filtered by account type + paper status
+function populateFProfileDropdown() {
+    const sel = document.getElementById('fProfile');
+    const msgEl = document.getElementById('fProfileMsg');
+    if (!sel) return;
 
-async function fetchRulesFromWorker() {
-    const msgEl = document.getElementById('fetchMsg');
-    msgEl.className = 'msg'; msgEl.textContent = 'Fetching…';
-    document.getElementById('fetchRulesBtn').disabled = true;
+    // Profiles matching: prop accounts get prop profiles, personal get broker profiles
+    const typeFilter = addAccountKind === 'prop' ? 'prop' : 'broker';
+    // Paper accounts can use same profile types — no additional filter
+    const matching = brokerProfiles.filter(p => p.profile_type === typeFilter);
 
-    try {
-        if (addAccountKind === 'prop') {
-            const firmName = document.getElementById('fFirm').value.trim();
-            const accountType = document.getElementById('fAcctType').value.trim();
-            if (!firmName) { msgEl.textContent = 'Enter a firm name first.'; msgEl.className='msg err'; return; }
-            const res = await fetch(GEMINI_WORKER_URL, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ firmName, accountType, mode: 'prop_rules' })
-            });
-            const json = await res.json();
-            if (json.error) { msgEl.textContent = json.error; msgEl.className='msg err'; return; }
-            lastFetchedRules = json;
-            document.getElementById('rTarget').value = json.profit_target_pct ?? '';
-            document.getElementById('rDDType').value = json.drawdown_type || 'static';
-            document.getElementById('rDD').value = json.drawdown_pct ?? '';
-            document.getElementById('rDaily').value = json.daily_loss_limit_pct ?? '';
-            document.getElementById('rComm').value = json.commission_per_lot_usd ?? '';
-            document.getElementById('rReset').value = json.daily_reset_utc_hour ?? 22;
-            msgEl.textContent = json.source_confidence === 'low' ? 'Low confidence — please fill in manually where blank.' : 'Fetched — please verify before saving.';
-            msgEl.className = 'msg ok';
-        } else {
-            const broker = document.getElementById('fBroker').value;
-            if (broker === 'IC Markets') {
-                lastFetchedRules = IC_MARKETS_PRESET;
-                document.getElementById('rComm').value = IC_MARKETS_PRESET.commission_per_lot_usd;
-                msgEl.textContent = 'Preset loaded — verify against icmarkets.com.';
-                msgEl.className = 'msg ok';
-            } else if (broker === 'Exness') {
-                const res = await fetch(GEMINI_WORKER_URL, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ firmName: 'Exness', mode: 'broker_commission' })
-                });
-                const json = await res.json();
-                lastFetchedRules = json;
-                document.getElementById('rComm').value = json.commission_per_lot_usd ?? '';
-                msgEl.textContent = json.source_confidence === 'low' ? 'Low confidence — fill in manually.' : 'Fetched — please verify.';
-                msgEl.className = 'msg ok';
-            } else {
-                lastFetchedRules = null;
-                msgEl.textContent = 'Enter commission manually below.';
-                msgEl.className = 'msg';
-            }
-            // Personal accounts don't use target/drawdown/daily fields — hide them
-            document.getElementById('rTarget').closest('.field').style.display = 'none';
-            document.getElementById('rDDType').closest('.field').style.display = 'none';
-            document.getElementById('rDD').closest('.field').style.display = 'none';
-            document.getElementById('rDaily').closest('.field').style.display = 'none';
-            document.getElementById('resetTimeField').style.display = 'none';
-        }
-        document.getElementById('reviewSection').style.display = 'block';
-        document.getElementById('confirmSaveBtn').style.display = 'block';
-    } catch (e) {
-        msgEl.textContent = 'Request failed: ' + e.message;
-        msgEl.className = 'msg err';
-    } finally {
-        document.getElementById('fetchRulesBtn').disabled = false;
+    sel.innerHTML = '<option value="">— Select a profile —</option>';
+    matching.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.profile_name;
+        sel.appendChild(opt);
+    });
+
+    if (!matching.length) {
+        msgEl.innerHTML = `No ${typeFilter === 'prop' ? 'prop firm' : 'broker'} profiles yet. <span style="color:var(--accent);cursor:pointer;text-decoration:underline;" onclick="closeAddAccountModal();openNewProfileModal('${typeFilter}')">Create one first →</span>`;
+        msgEl.style.color = 'var(--neg)';
+        document.getElementById('confirmSaveBtn').disabled = true;
+    } else {
+        msgEl.textContent = '';
+        document.getElementById('confirmSaveBtn').disabled = false;
     }
 }
 
 async function confirmSaveAccount() {
     const name = document.getElementById('fName').value.trim();
     const startBal = parseFloat(document.getElementById('fStartBal').value);
-    if (!name || !startBal) { alert('Name and starting balance are required.'); return; }
+    const profileId = document.getElementById('fProfile').value;
+
+    if (!name) { alert('Account name is required.'); return; }
+    if (!startBal) { alert('Starting balance is required.'); return; }
+    if (!profileId) { alert('Please select a profile. Create one in Settings → Profiles first.'); return; }
+
+    const currBalRaw = document.getElementById('fCurrBal')?.value;
+    const currBal = currBalRaw ? parseFloat(currBalRaw) : null;
+
+    const saveBtn = document.getElementById('confirmSaveBtn');
+    saveBtn.textContent = '⏳ Saving…';
+    saveBtn.disabled = true;
 
     const payload = {
         user_id: currentUser.id,
@@ -1783,29 +1837,23 @@ async function confirmSaveAccount() {
         account_kind: addAccountKind,
         is_paper: addAccountPaper,
         starting_balance: startBal,
+        current_balance_override: (addAccountKind === 'prop' && currBal && currBal !== startBal) ? currBal : null,
         currency: 'USD',
         status: 'active',
-        setup_source: lastFetchedRules ? (addAccountKind==='personal' && document.getElementById('fBroker').value==='IC Markets' ? 'preset' : 'ai_search') : 'manual',
-        ai_suggested_raw: lastFetchedRules || null,
-        ai_fetched_at: lastFetchedRules ? new Date().toISOString() : null,
+        broker_profile_id: profileId,
         user_confirmed_at: new Date().toISOString()
     };
 
     if (addAccountKind === 'prop') {
-        payload.firm_name = document.getElementById('fFirm').value.trim();
-        payload.account_type = document.getElementById('fAcctType').value.trim();
-        payload.profit_target_pct = parseFloat(document.getElementById('rTarget').value) || null;
-        payload.drawdown_type = document.getElementById('rDDType').value;
-        payload.drawdown_pct = parseFloat(document.getElementById('rDD').value) || null;
-        payload.daily_loss_limit_pct = parseFloat(document.getElementById('rDaily').value) || null;
-        payload.commission_per_lot = parseFloat(document.getElementById('rComm').value) || 0;
-        payload.daily_reset_utc_hour = parseInt(document.getElementById('rReset').value) ?? 22;
+        payload.firm_name = document.getElementById('fFirm').value.trim() || null;
+        payload.account_type = document.getElementById('fAcctType').value.trim() || null;
     } else {
-        payload.broker_name = document.getElementById('fBroker').value;
-        payload.commission_per_lot = parseFloat(document.getElementById('rComm').value) || 0;
+        payload.broker_name = document.getElementById('fBrokerName').value.trim() || null;
     }
 
     const { data, error } = await sb.from('accounts').insert(payload).select().single();
+    saveBtn.textContent = 'Save Account';
+    saveBtn.disabled = false;
     if (error) { alert('Save failed: ' + error.message); return; }
 
     accounts.push(data);
@@ -1860,7 +1908,7 @@ function setTheme(theme) {
     document.querySelectorAll('.theme-pill').forEach(b => b.classList.toggle('active', b.dataset.theme === theme));
     if (_equityChart && _calTradeResults.length) {
         const acct = getActiveAccount();
-        if (acct) renderEquityCurve(_calTradeResults, Number(acct.starting_balance));
+        if (acct) renderEquityCurve(_calTradeResults, Number(acct.starting_balance), acct.current_balance_override != null ? Number(acct.current_balance_override) : null);
     }
 }
 
@@ -1961,6 +2009,9 @@ function renderProfilesList() {
 async function saveProfileEdit(profileId) {
     const p = brokerProfiles.find(x => x.id === profileId);
     if (!p) return;
+    // Find the save button for this profile card and animate it
+    const saveBtn = document.querySelector(`[onclick="saveProfileEdit('${profileId}')"]`);
+    if (saveBtn) { saveBtn.textContent = '⏳'; saveBtn.disabled = true; }
     const g = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
     const pf = (id) => parseFloat(g(id)) || null;
     const pi = (id) => parseInt(g(id));
@@ -1995,6 +2046,7 @@ async function saveProfileEdit(profileId) {
         point_value_commodities_usd: pf(`pf_pvCom_${profileId}`),
     };
     const { error } = await sb.from('broker_profiles').update(payload).eq('id', profileId);
+    if (saveBtn) { saveBtn.textContent = 'Save'; saveBtn.disabled = false; }
     if (error) { alert('Save failed: ' + error.message); return; }
     Object.assign(p, payload);
     renderActiveAccount();
@@ -2054,13 +2106,15 @@ function closeProfileModal() { document.getElementById('profileModalScrim').clas
 // Fetches full per-class profile data from Gemini via the Worker
 async function fetchProfileRules() {
     const firmName = document.getElementById('pmFirmName').value.trim();
-    if (!firmName) { 
+    if (!firmName) {
         const msg = document.getElementById('pmFetchMsg');
         msg.textContent = 'Enter a firm or broker name first.';
         msg.className = 'msg err';
         return;
     }
     const msg = document.getElementById('pmFetchMsg');
+    const fetchBtn = document.querySelector('#pmStep1 .btn.primary');
+    if (fetchBtn) { fetchBtn.textContent = '⏳ Fetching…'; fetchBtn.disabled = true; }
     msg.textContent = 'Fetching from AI…';
     msg.className = 'msg';
 
@@ -2153,6 +2207,9 @@ async function fetchProfileRules() {
     } catch (e) {
         msg.textContent = 'Request failed: ' + e.message;
         msg.className = 'msg err';
+    } finally {
+        const fetchBtn = document.querySelector('#pmStep1 .btn.primary');
+        if (fetchBtn) { fetchBtn.textContent = 'Fetch with AI'; fetchBtn.disabled = false; }
     }
 }
 
@@ -2195,8 +2252,13 @@ function _buildProfilePayload() {
 async function saveProfile() {
     const name = document.getElementById('pmName').value.trim();
     if (!name) { alert('Profile name is required.'); return; }
+    const saveBtn = document.getElementById('pmSaveBtn');
+    saveBtn.textContent = '⏳ Saving…';
+    saveBtn.disabled = true;
     const payload = _buildProfilePayload();
     const { data, error } = await sb.from('broker_profiles').insert(payload).select().single();
+    saveBtn.textContent = 'Confirm & Save';
+    saveBtn.disabled = false;
     if (error) { alert('Save failed: ' + error.message); return; }
     brokerProfiles.push(data);
     closeProfileModal();
