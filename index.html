@@ -125,44 +125,64 @@
         background:var(--bg); color:var(--ink); font-family:var(--font-sans); font-size:13px; }
     .profile-card .pc-linked { font-size:11px; color:var(--muted); margin-top:8px; }
     /* Asset specs table */
-    /* ── Asset Spec Cards — mobile-first, full-width card per symbol ── */
+    /* ── Asset Spec Cards — single column, one element per line ── */
     .spec-card {
         background: var(--surface);
         border: 1.5px solid var(--border);
         border-radius: var(--radius-m);
-        padding: 14px 16px;
-        margin-bottom: 12px;
+        overflow: hidden;
+        margin-bottom: 14px;
     }
     .spec-card-head {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 12px;
+        padding: 14px 16px 12px;
+        border-bottom: 1px solid var(--border);
         gap: 10px;
     }
     .spec-symbol {
         font-family: var(--font-mono);
-        font-size: 17px;
+        font-size: 18px;
         font-weight: 800;
         letter-spacing: .02em;
     }
-    .spec-badges { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-    .conf-badge { font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
+    .spec-badges { display: flex; gap: 6px; align-items: center; }
+    .conf-badge { font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
     .conf-badge.high { background: var(--pos-bg); color: var(--pos); }
     .conf-badge.low  { background: var(--neg-bg); color: var(--neg); }
     .conf-badge.user { background: var(--surface-alt); color: var(--muted); }
-    .spec-card .field label {
-        font-size: 11px;
+    .spec-del-btn {
+        width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid var(--border);
+        background: transparent; color: var(--muted); cursor: pointer; font-size: 14px;
+        display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        touch-action: manipulation;
+    }
+    .spec-del-btn:hover { background: var(--neg-bg); color: var(--neg); border-color: var(--neg); }
+    .spec-field {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+    }
+    .spec-field label {
+        display: block;
+        font-size: 10px;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: .04em;
+        letter-spacing: .06em;
         color: var(--muted);
-        display: block;
-        margin-bottom: 5px;
+        margin-bottom: 7px;
     }
-    .spec-card input, .spec-card select, .spec-card textarea {
+    .spec-field label span {
+        font-weight: 400;
+        font-size: 9px;
+        letter-spacing: .02em;
+        text-transform: none;
+    }
+    .spec-field input,
+    .spec-field select,
+    .spec-field textarea {
         width: 100%;
-        padding: 10px 12px;
+        padding: 12px 14px;
         border: 1.5px solid var(--border);
         border-radius: 8px;
         background: var(--bg);
@@ -170,40 +190,34 @@
         font-family: var(--font-mono);
         font-size: 16px; /* ≥16px prevents iOS auto-zoom */
         touch-action: manipulation;
+        box-sizing: border-box;
     }
-    .spec-card textarea {
+    .spec-field select { font-family: var(--font-sans); }
+    .spec-field textarea {
         font-family: var(--font-sans);
-        font-size: 13px;
-        min-height: 56px;
+        font-size: 14px;
+        min-height: 70px;
         resize: vertical;
         line-height: 1.5;
     }
-    .spec-card select { font-family: var(--font-sans); font-size: 14px; }
-    .spec-field-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-        margin-bottom: 10px;
-    }
-    .spec-field-grid .field { margin-bottom: 0; }
     .spec-ai-note {
-        font-size: 11.5px;
+        padding: 10px 16px;
+        font-size: 12px;
         color: var(--muted);
         font-style: italic;
-        margin-bottom: 10px;
         line-height: 1.5;
-        padding: 8px 10px;
         background: var(--surface-alt);
-        border-radius: 6px;
+        border-bottom: 1px solid var(--border);
     }
-    .spec-actions {
-        display: flex;
-        gap: 8px;
-        margin-top: 12px;
+    .spec-save-row {
+        padding: 12px 16px;
     }
-    .spec-actions .btn { flex: 1; padding: 11px; font-size: 14px; border-radius: 10px; touch-action: manipulation; }
-    @media (max-width: 480px) {
-        .spec-field-grid { grid-template-columns: 1fr; }
+    .spec-save-row .btn {
+        width: 100%;
+        padding: 13px;
+        font-size: 15px;
+        border-radius: 10px;
+        touch-action: manipulation;
     }
     /* Account-profile link row */
     .acct-profile-row { display:flex; align-items:center; justify-content:space-between;
@@ -2409,18 +2423,24 @@ function renderAssetSpecsList() {
 
     const CLASS_OPTIONS = [
         ['', '— Select class —'],
-        ['forex', 'Forex'],
-        ['metal', 'Metal (XAU, XAG…)'],
-        ['index', 'Index (US500, NAS…)'],
+        ['forex',     'Forex'],
+        ['metal',     'Metal (XAU, XAG…)'],
+        ['index',     'Index (US500, NAS…)'],
         ['commodity', 'Commodity (WTI, OIL…)'],
-        ['crypto', 'Crypto'],
-        ['other', 'Other']
+        ['crypto',    'Crypto'],
+        ['other',     'Other']
     ];
 
+    const sf = (id, label, hint, inputHtml) => `
+        <div class="spec-field">
+            <label>${label}${hint ? ` <span>${hint}</span>` : ''}</label>
+            ${inputHtml}
+        </div>`;
+
     el.innerHTML = specs.map(s => {
-        const conf = (s.source || s.source_confidence === 'high') && s.source === 'user_edit' ? 'user'
+        const conf = s.source === 'user_edit' ? 'user'
             : (s.source_confidence || 'low').toLowerCase();
-        const confLabel = conf === 'user' ? 'Edited' : conf;
+        const confLabel = conf === 'user' ? 'Edited' : conf === 'high' ? 'High confidence' : 'Low confidence';
 
         const classOpts = CLASS_OPTIONS.map(([v, l]) =>
             `<option value="${v}" ${(s.asset_class || '') === v ? 'selected' : ''}>${l}</option>`
@@ -2428,55 +2448,41 @@ function renderAssetSpecsList() {
 
         const aiNote = s.notes
             ? `<div class="spec-ai-note">📌 AI note: ${s.notes}</div>` : '';
-        const userNote = s.user_notes || '';
 
         return `<div class="spec-card">
             <div class="spec-card-head">
                 <div class="spec-symbol">${s.symbol}</div>
                 <div class="spec-badges">
-                    <span class="conf-badge ${conf}">${confLabel} confidence</span>
-                    <button style="width:28px;height:28px;border-radius:50%;border:none;background:var(--surface-alt);color:var(--muted);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;touch-action:manipulation;"
-                        onclick="deleteAssetSpec('${s.symbol}')" title="Delete spec">✕</button>
+                    <span class="conf-badge ${conf}">${confLabel}</span>
+                    <button class="spec-del-btn" onclick="deleteAssetSpec('${s.symbol}')" title="Delete spec">✕</button>
                 </div>
             </div>
 
-            <div class="field" style="margin-bottom:10px;">
-                <label>Asset Class <span style="font-size:9px;color:var(--muted);font-weight:400;">(drives profile commission fallback)</span></label>
-                <select id="ss_cls_${s.symbol}">${classOpts}</select>
-            </div>
+            ${sf(`ss_cls_${s.symbol}`, 'Asset Class', 'drives profile commission fallback',
+                `<select id="ss_cls_${s.symbol}">${classOpts}</select>`)}
 
-            <div class="spec-field-grid">
-                <div class="field">
-                    <label>Contract Size <span style="font-size:9px;color:var(--muted);">(units/lot)</span></label>
-                    <input id="ss_cs_${s.symbol}" type="number" step="any" value="${s.contract_size ?? ''}" placeholder="e.g. 100 (XAU), 1 (index)">
-                </div>
-                <div class="field">
-                    <label>Pip Size <span style="font-size:9px;color:var(--muted);">(min move)</span></label>
-                    <input id="ss_pip_${s.symbol}" type="number" step="any" value="${s.pip_size ?? ''}" placeholder="e.g. 0.01 (XAU), 1 (index)">
-                </div>
-                <div class="field">
-                    <label>Point Value USD/Lot <span style="font-size:9px;color:var(--muted);">(overrides calc)</span></label>
-                    <input id="ss_pv_${s.symbol}" type="number" step="any" value="${s.point_value_usd ?? ''}" placeholder="e.g. 1.00 (US500)">
-                </div>
-                <div class="field">
-                    <label>Quote Currency</label>
-                    <input id="ss_qc_${s.symbol}" type="text" value="${s.quote_currency ?? ''}" placeholder="USD" style="text-transform:uppercase;">
-                </div>
-                <div class="field" style="grid-column:span 2;">
-                    <label>Commission / Lot (USD) <span style="font-size:9px;color:var(--muted);">(overrides profile rate for this symbol)</span></label>
-                    <input id="ss_comm_${s.symbol}" type="number" step="0.01" value="${s.commission_per_lot ?? ''}" placeholder="Leave blank to use profile rate">
-                </div>
-            </div>
+            ${sf(`ss_cs_${s.symbol}`, 'Contract Size', 'units per 1 standard lot',
+                `<input id="ss_cs_${s.symbol}" type="number" step="any" value="${s.contract_size ?? ''}" placeholder="e.g. 100 for XAU, 1 for index">`)}
+
+            ${sf(`ss_pip_${s.symbol}`, 'Pip Size', 'minimum price movement',
+                `<input id="ss_pip_${s.symbol}" type="number" step="any" value="${s.pip_size ?? ''}" placeholder="e.g. 0.01 for XAU, 1 for US500">`)}
+
+            ${sf(`ss_pv_${s.symbol}`, 'Point Value USD / Lot', 'overrides contract-size calc when set',
+                `<input id="ss_pv_${s.symbol}" type="number" step="any" value="${s.point_value_usd ?? ''}" placeholder="e.g. 1.00 for US500">`)}
+
+            ${sf(`ss_qc_${s.symbol}`, 'Quote Currency', '',
+                `<input id="ss_qc_${s.symbol}" type="text" value="${s.quote_currency ?? ''}" placeholder="USD" style="text-transform:uppercase;">`)}
+
+            ${sf(`ss_comm_${s.symbol}`, 'Commission / Lot (USD)', 'overrides profile class rate for this symbol only',
+                `<input id="ss_comm_${s.symbol}" type="number" step="0.01" value="${s.commission_per_lot ?? ''}" placeholder="Blank = use profile rate">`)}
 
             ${aiNote}
 
-            <div class="field" style="margin-bottom:0;">
-                <label>Notes <span style="font-size:9px;color:var(--muted);">(your annotations)</span></label>
-                <textarea id="ss_notes_${s.symbol}" placeholder="e.g. Verified against IC Markets contract specs July 2026">${userNote}</textarea>
-            </div>
+            ${sf(`ss_notes_${s.symbol}`, 'Your Notes', '',
+                `<textarea id="ss_notes_${s.symbol}" placeholder="e.g. Verified against IC Markets contract specs July 2026">${s.user_notes ?? ''}</textarea>`)}
 
-            <div class="spec-actions">
-                <button class="btn ghost" onclick="saveAssetSpec('${s.symbol}')">Save</button>
+            <div class="spec-save-row">
+                <button class="btn primary" onclick="saveAssetSpec('${s.symbol}')">Save Changes</button>
             </div>
         </div>`;
     }).join('');
