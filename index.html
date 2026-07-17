@@ -125,15 +125,86 @@
         background:var(--bg); color:var(--ink); font-family:var(--font-sans); font-size:13px; }
     .profile-card .pc-linked { font-size:11px; color:var(--muted); margin-top:8px; }
     /* Asset specs table */
-    .spec-row { display:grid; grid-template-columns:80px 1fr 1fr 1fr 70px 44px;
-        gap:6px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); }
-    .spec-row.spec-head { font-size:9.5px; text-transform:uppercase; letter-spacing:.04em;
-        color:var(--muted); font-weight:700; padding-bottom:6px; }
-    .spec-row input { width:100%; padding:5px 8px; border:1px solid var(--border); border-radius:6px;
-        background:var(--bg); color:var(--ink); font-family:var(--font-mono); font-size:12px; }
-    .conf-badge { font-size:9px; font-weight:700; padding:2px 7px; border-radius:20px; }
-    .conf-badge.high { background:var(--pos-bg); color:var(--pos); }
-    .conf-badge.low  { background:var(--neg-bg); color:var(--neg); }
+    /* ── Asset Spec Cards — mobile-first, full-width card per symbol ── */
+    .spec-card {
+        background: var(--surface);
+        border: 1.5px solid var(--border);
+        border-radius: var(--radius-m);
+        padding: 14px 16px;
+        margin-bottom: 12px;
+    }
+    .spec-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+        gap: 10px;
+    }
+    .spec-symbol {
+        font-family: var(--font-mono);
+        font-size: 17px;
+        font-weight: 800;
+        letter-spacing: .02em;
+    }
+    .spec-badges { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .conf-badge { font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
+    .conf-badge.high { background: var(--pos-bg); color: var(--pos); }
+    .conf-badge.low  { background: var(--neg-bg); color: var(--neg); }
+    .conf-badge.user { background: var(--surface-alt); color: var(--muted); }
+    .spec-card .field label {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: var(--muted);
+        display: block;
+        margin-bottom: 5px;
+    }
+    .spec-card input, .spec-card select, .spec-card textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1.5px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--font-mono);
+        font-size: 16px; /* ≥16px prevents iOS auto-zoom */
+        touch-action: manipulation;
+    }
+    .spec-card textarea {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        min-height: 56px;
+        resize: vertical;
+        line-height: 1.5;
+    }
+    .spec-card select { font-family: var(--font-sans); font-size: 14px; }
+    .spec-field-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+    .spec-field-grid .field { margin-bottom: 0; }
+    .spec-ai-note {
+        font-size: 11.5px;
+        color: var(--muted);
+        font-style: italic;
+        margin-bottom: 10px;
+        line-height: 1.5;
+        padding: 8px 10px;
+        background: var(--surface-alt);
+        border-radius: 6px;
+    }
+    .spec-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+    }
+    .spec-actions .btn { flex: 1; padding: 11px; font-size: 14px; border-radius: 10px; touch-action: manipulation; }
+    @media (max-width: 480px) {
+        .spec-field-grid { grid-template-columns: 1fr; }
+    }
     /* Account-profile link row */
     .acct-profile-row { display:flex; align-items:center; justify-content:space-between;
         padding:10px 0; border-bottom:1px solid var(--border); }
@@ -784,7 +855,9 @@ async function loadBrokerProfiles() {
 
 async function loadAssetSpecsCache() {
     try {
-        const { data } = await sb.from('asset_specs').select('*').eq('user_id', currentUser.id);
+        const { data } = await sb.from('asset_specs')
+            .select('id,symbol,asset_class,contract_size,pip_size,point_value_usd,quote_currency,commission_per_lot,source,source_confidence,notes,user_notes,fetched_at')
+            .eq('user_id', currentUser.id);
         (data || []).forEach(row => { assetSpecsCache[row.symbol] = row; });
     } catch (e) {
         console.warn('Could not preload asset_specs (table may not exist yet):', e.message);
@@ -1161,25 +1234,53 @@ function classifySymbol(pair) {
 }
 
 
-// Resolve the effective commission per lot for a trade using profile's per-class rates.
+// Commission priority chain:
+// 1. asset_spec.commission_per_lot (symbol-specific override)
+// 2. profile.commission_{asset_class} (class-level from spec's asset_class tag)
+// 3. profile.commission_per_lot (flat profile rate)
+// 4. account.commission_per_lot (legacy flat rate)
 function resolveCommission(t, acct) {
     if (!acct) return 0;
     const profile = acct.broker_profile_id ? brokerProfiles.find(p => p.id === acct.broker_profile_id) : null;
-    if (profile) {
-        const cls = classifySymbol(t.pair, profile);
-        if (cls.kind === 'direct_usd' || cls.kind === 'usd_base' || cls.kind === 'cross_pair') {
-            const base = (t.pair || '').toUpperCase().slice(0, 3);
-            if (METAL_OZ_PER_LOT[base] || t.pair?.toUpperCase().includes('XA')) {
-                return Number(profile.commission_metals ?? profile.commission_per_lot ?? 0);
-            }
-            return Number(profile.commission_forex ?? profile.commission_per_lot ?? 0);
-        }
-        // needs_lookup — check spec to determine if index or commodity
-        const spec = assetSpecsCache[t.pair];
-        if (spec && spec.point_value_usd != null) return Number(profile.commission_indices ?? profile.commission_per_lot ?? 0);
-        return Number(profile.commission_commodities ?? profile.commission_per_lot ?? 0);
+    const spec = assetSpecsCache[t.pair];
+
+    // Priority 1: symbol-specific commission on the asset spec
+    if (spec && spec.commission_per_lot != null) {
+        return Number(spec.commission_per_lot);
     }
+
+    if (profile) {
+        // Priority 2: profile class rate, driven by spec's asset_class tag
+        const assetClass = spec?.asset_class || _inferAssetClass(t.pair);
+        const classMap = {
+            forex:     profile.commission_forex,
+            metal:     profile.commission_metals,
+            index:     profile.commission_indices,
+            commodity: profile.commission_commodities,
+            crypto:    profile.commission_forex,  // fallback to forex rate for crypto
+            other:     null
+        };
+        const classRate = classMap[assetClass];
+        if (classRate != null) return Number(classRate);
+
+        // Priority 3: flat profile rate
+        if (profile.commission_per_lot != null) return Number(profile.commission_per_lot);
+    }
+
+    // Priority 4: legacy flat rate on account
     return Number(acct.commission_per_lot || 0);
+}
+
+// Infer asset class from symbol when spec doesn't have one set yet
+function _inferAssetClass(pair) {
+    if (!pair) return 'other';
+    const p = pair.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (p.startsWith('XAU') || p.startsWith('XAG') || p.startsWith('XPT') || p.startsWith('XPD')) return 'metal';
+    if (p.length === 6 && ISO_CCY.has(p.slice(0,3)) && ISO_CCY.has(p.slice(3,6))) return 'forex';
+    if (p.endsWith('USD') && p.length === 6 && ISO_CCY.has(p.slice(0,3))) return 'forex';
+    if (p.startsWith('USD') && p.length === 6) return 'forex';
+    // Rough heuristic for indices/commodities — asset spec should be set explicitly
+    return 'other';
 }
 
 // Resolve profile-specific contract spec for a symbol.
@@ -1284,11 +1385,13 @@ function calcPnl(t, acct) {
         ensureAssetSpecLookup(t.pair);
         return { pnl: 0, aiSourced: true, pending: true };
     }
-    // Use profile indices/commodities lot size + point value if available
-    const lotSize = profile?.lot_size_indices ?? profile?.lot_size_commodities ?? 1;
+    // Use spec's pip_size if set, otherwise fall back to point_value_usd direct calc
+    const specPipSize = assetSpec.pip_size;
     const pointVal = assetSpec.point_value_usd;
     if (pointVal != null) {
-        const pnl = (Number(t.close_price) - Number(t.entry_price)) * Number(t.lot_size) * Number(pointVal) * dir;
+        const effectivePipSize = specPipSize ?? 1;
+        const pipMove = (Number(t.close_price) - Number(t.entry_price)) / effectivePipSize * dir;
+        const pnl = pipMove * Number(t.lot_size) * Number(pointVal);
         return { pnl: pnl - commissionDeduct, aiSourced: true };
     }
     if (assetSpec.contract_size != null) {
@@ -2300,39 +2403,120 @@ function renderAssetSpecsList() {
     if (!el) return;
     const specs = Object.values(assetSpecsCache);
     if (!specs.length) {
-        el.innerHTML = '<div style="font-size:12.5px;color:var(--muted);">No asset specs yet. Sync trades containing non-standard instruments to auto-populate.</div>';
+        el.innerHTML = '<div style="font-size:13px;color:var(--muted);padding:8px 0;">No asset specs yet — they auto-populate when you sync trades containing non-standard instruments (indices, commodities, crypto etc.).</div>';
         return;
     }
-    el.innerHTML = `<div class="spec-row spec-head">
-        <div>Symbol</div><div>Contract Size</div><div>Point Value (USD)</div><div>Quote Ccy</div><div>Confidence</div><div></div>
-    </div>` + specs.map(s => {
-        const conf = (s.source_confidence || 'low').toLowerCase();
-        return `<div class="spec-row">
-            <div style="font-family:var(--font-mono);font-size:12px;font-weight:700;">${s.symbol}</div>
-            <input id="ss_cs_${s.symbol}" type="number" step="any" value="${s.contract_size??''}" placeholder="—">
-            <input id="ss_pv_${s.symbol}" type="number" step="any" value="${s.point_value_usd??''}" placeholder="—">
-            <input id="ss_qc_${s.symbol}" type="text" value="${s.quote_currency??''}" placeholder="USD" style="text-transform:uppercase;">
-            <span class="conf-badge ${conf}">${conf}</span>
-            <button class="btn ghost" style="padding:4px 10px;font-size:11px;border-radius:8px;" onclick="saveAssetSpec('${s.symbol}')">Save</button>
+
+    const CLASS_OPTIONS = [
+        ['', '— Select class —'],
+        ['forex', 'Forex'],
+        ['metal', 'Metal (XAU, XAG…)'],
+        ['index', 'Index (US500, NAS…)'],
+        ['commodity', 'Commodity (WTI, OIL…)'],
+        ['crypto', 'Crypto'],
+        ['other', 'Other']
+    ];
+
+    el.innerHTML = specs.map(s => {
+        const conf = (s.source || s.source_confidence === 'high') && s.source === 'user_edit' ? 'user'
+            : (s.source_confidence || 'low').toLowerCase();
+        const confLabel = conf === 'user' ? 'Edited' : conf;
+
+        const classOpts = CLASS_OPTIONS.map(([v, l]) =>
+            `<option value="${v}" ${(s.asset_class || '') === v ? 'selected' : ''}>${l}</option>`
+        ).join('');
+
+        const aiNote = s.notes
+            ? `<div class="spec-ai-note">📌 AI note: ${s.notes}</div>` : '';
+        const userNote = s.user_notes || '';
+
+        return `<div class="spec-card">
+            <div class="spec-card-head">
+                <div class="spec-symbol">${s.symbol}</div>
+                <div class="spec-badges">
+                    <span class="conf-badge ${conf}">${confLabel} confidence</span>
+                    <button style="width:28px;height:28px;border-radius:50%;border:none;background:var(--surface-alt);color:var(--muted);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;touch-action:manipulation;"
+                        onclick="deleteAssetSpec('${s.symbol}')" title="Delete spec">✕</button>
+                </div>
+            </div>
+
+            <div class="field" style="margin-bottom:10px;">
+                <label>Asset Class <span style="font-size:9px;color:var(--muted);font-weight:400;">(drives profile commission fallback)</span></label>
+                <select id="ss_cls_${s.symbol}">${classOpts}</select>
+            </div>
+
+            <div class="spec-field-grid">
+                <div class="field">
+                    <label>Contract Size <span style="font-size:9px;color:var(--muted);">(units/lot)</span></label>
+                    <input id="ss_cs_${s.symbol}" type="number" step="any" value="${s.contract_size ?? ''}" placeholder="e.g. 100 (XAU), 1 (index)">
+                </div>
+                <div class="field">
+                    <label>Pip Size <span style="font-size:9px;color:var(--muted);">(min move)</span></label>
+                    <input id="ss_pip_${s.symbol}" type="number" step="any" value="${s.pip_size ?? ''}" placeholder="e.g. 0.01 (XAU), 1 (index)">
+                </div>
+                <div class="field">
+                    <label>Point Value USD/Lot <span style="font-size:9px;color:var(--muted);">(overrides calc)</span></label>
+                    <input id="ss_pv_${s.symbol}" type="number" step="any" value="${s.point_value_usd ?? ''}" placeholder="e.g. 1.00 (US500)">
+                </div>
+                <div class="field">
+                    <label>Quote Currency</label>
+                    <input id="ss_qc_${s.symbol}" type="text" value="${s.quote_currency ?? ''}" placeholder="USD" style="text-transform:uppercase;">
+                </div>
+                <div class="field" style="grid-column:span 2;">
+                    <label>Commission / Lot (USD) <span style="font-size:9px;color:var(--muted);">(overrides profile rate for this symbol)</span></label>
+                    <input id="ss_comm_${s.symbol}" type="number" step="0.01" value="${s.commission_per_lot ?? ''}" placeholder="Leave blank to use profile rate">
+                </div>
+            </div>
+
+            ${aiNote}
+
+            <div class="field" style="margin-bottom:0;">
+                <label>Notes <span style="font-size:9px;color:var(--muted);">(your annotations)</span></label>
+                <textarea id="ss_notes_${s.symbol}" placeholder="e.g. Verified against IC Markets contract specs July 2026">${userNote}</textarea>
+            </div>
+
+            <div class="spec-actions">
+                <button class="btn ghost" onclick="saveAssetSpec('${s.symbol}')">Save</button>
+            </div>
         </div>`;
     }).join('');
 }
 
-async function saveAssetSpec(symbol) {
-    const cs = parseFloat(document.getElementById(`ss_cs_${symbol}`)?.value) || null;
-    const pv = parseFloat(document.getElementById(`ss_pv_${symbol}`)?.value) || null;
-    const qc = (document.getElementById(`ss_qc_${symbol}`)?.value || '').trim().toUpperCase() || null;
-    const row = {
-        user_id: currentUser.id, symbol,
-        contract_size: cs, point_value_usd: pv, quote_currency: qc,
-        source: 'user_edit', source_confidence: 'high',
-        fetched_at: new Date().toISOString()
-    };
-    const { error } = await sb.from('asset_specs').upsert(row, { onConflict: 'user_id,symbol' });
-    if (error) { alert('Save failed: ' + error.message); return; }
-    assetSpecsCache[symbol] = { ...assetSpecsCache[symbol], ...row };
+async function deleteAssetSpec(symbol) {
+    if (!confirm(`Delete spec for ${symbol}? The AI will re-look it up next time a trade with this symbol syncs.`)) return;
+    await sb.from('asset_specs').delete().eq('user_id', currentUser.id).eq('symbol', symbol);
+    delete assetSpecsCache[symbol];
     renderAssetSpecsList();
     renderActiveAccount();
+}
+
+async function saveAssetSpec(symbol) {
+    const btn = document.querySelector(`.spec-card .spec-actions .btn[onclick="saveAssetSpec('${symbol}')"]`);
+    if (btn) { btn.textContent = '⏳ Saving…'; btn.disabled = true; }
+
+    const g = id => document.getElementById(id)?.value ?? '';
+    const pf = id => { const v = parseFloat(g(id)); return isNaN(v) ? null : v; };
+
+    const row = {
+        user_id: currentUser.id,
+        symbol,
+        asset_class:       g(`ss_cls_${symbol}`) || null,
+        contract_size:     pf(`ss_cs_${symbol}`),
+        pip_size:          pf(`ss_pip_${symbol}`),
+        point_value_usd:   pf(`ss_pv_${symbol}`),
+        quote_currency:    g(`ss_qc_${symbol}`).trim().toUpperCase() || null,
+        commission_per_lot: pf(`ss_comm_${symbol}`),
+        user_notes:        g(`ss_notes_${symbol}`).trim() || null,
+        source: 'user_edit',
+        source_confidence: 'high',
+        fetched_at: new Date().toISOString()
+    };
+
+    const { error } = await sb.from('asset_specs').upsert(row, { onConflict: 'user_id,symbol' });
+    if (btn) { btn.textContent = 'Save'; btn.disabled = false; }
+    if (error) { alert('Save failed: ' + error.message); return; }
+    assetSpecsCache[symbol] = { ...assetSpecsCache[symbol], ...row };
+    renderActiveAccount(); // recalculate P&L with updated spec
 }
 
 checkExistingSession();
